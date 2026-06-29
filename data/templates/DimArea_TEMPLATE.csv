@@ -1,0 +1,11 @@
+AreaKey;ContratoKey;AreaNome;AreaTipo;Capacidade
+1;1;Andar 1;Escritório;50
+2;1;Andar 2;Escritório;40
+3;1;Andar 3;Escritório;30
+4;1;Recepção;Comum;20
+5;1;Sala de Reuniões;Comum;15
+6;2;Andar 1;Escritório;60
+7;2;Andar 2;Escritório;45
+8;2;Auditório;Comum;100
+9;3;Loja 1;Comercial;30
+10;3;Loja 2;Comercial;25

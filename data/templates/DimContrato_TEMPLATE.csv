@@ -1,0 +1,6 @@
+ContratoKey;ClienteKey;ContratoNome;DataInicio;DataFim;SLADisponibilidade;SLAConforto
+1;1;Contrato Empresa ABC - Principal;2023-01-01;2025-12-31;95;90
+2;2;Contrato Hospital XYZ - Manutenção;2023-01-01;2025-12-31;97;92
+3;3;Contrato Shopping Center;2023-01-01;2025-12-31;96;91
+4;4;Contrato Escola Pública;2023-01-01;2025-12-31;94;88
+5;5;Contrato Escritório Corporativo;2023-01-01;2025-12-31;98;93

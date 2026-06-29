@@ -1,0 +1,6 @@
+DataKey;Data;Ano;Mes;NomeMes;MesAno;Trimestre;Dia;DiaDaSemana;NomeDiaDaSemana;FimDeSemana
+20260101;2026-01-01;2026;1;Janeiro;01/2026;1;1;3;Quinta-feira;0
+20260102;2026-01-02;2026;1;Janeiro;01/2026;1;2;4;Sexta-feira;0
+20260103;2026-01-03;2026;1;Janeiro;01/2026;1;3;5;Sábado;1
+20260104;2026-01-04;2026;1;Janeiro;01/2026;1;4;6;Domingo;1
+20260105;2026-01-05;2026;1;Janeiro;01/2026;1;5;0;Segunda-feira;0

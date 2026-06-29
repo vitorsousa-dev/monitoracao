@@ -1,0 +1,11 @@
+EquipamentoKey;AreaKey;EquipamentoNome;EquipamentoTipo;CapacidadeBTU;DataInstalacao
+1;1;Equipamento 001;VRV;18000;2021-03-15
+2;1;Equipamento 002;Split;12000;2021-05-20
+3;2;Equipamento 003;Cassete;24000;2020-11-10
+4;2;Equipamento 004;VRV;36000;2022-01-05
+5;3;Equipamento 005;Split;9000;2021-08-30
+6;4;Equipamento 006;VRV;24000;2020-06-12
+7;5;Equipamento 007;Chiller;60000;2019-12-01
+8;6;Equipamento 008;Split;18000;2022-04-18
+9;7;Equipamento 009;Cassete;12000;2021-10-25
+10;8;Equipamento 010;VRV;48000;2020-09-08
