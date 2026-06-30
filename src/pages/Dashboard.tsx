@@ -19,13 +19,225 @@ import { Equipment, EquipmentJustification, SystemRanking } from '@/types'
 import { buildEquipmentJustification, getHealthStatusText } from '@/lib/utils'
 import { TrendingUp, TrendingDown, Activity, AlertTriangle, Minus, Printer } from 'lucide-react'
 
-function escapeHtml(value: string) {
+type PdfColor = [number, number, number]
+
+interface PdfTextBlock {
+  kind: 'text'
+  text: string
+  x: number
+  y: number
+  size?: number
+  color?: PdfColor
+  bold?: boolean
+}
+
+interface PdfRectBlock {
+  kind: 'rect'
+  x: number
+  y: number
+  width: number
+  height: number
+  fillColor?: PdfColor
+  strokeColor?: PdfColor
+  lineWidth?: number
+}
+
+type PdfBlock = PdfTextBlock | PdfRectBlock
+
+function sanitizePdfText(value: string) {
   return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7E]/g, ' ')
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)')
+}
+
+function wrapPdfText(text: string, maxLength = 88) {
+  if (text.length <= maxLength) {
+    return [text]
+  }
+
+  const words = text.split(/\s+/)
+  const lines: string[] = []
+  let currentLine = ''
+
+  words.forEach((word) => {
+    const nextLine = currentLine ? `${currentLine} ${word}` : word
+    if (nextLine.length > maxLength) {
+      if (currentLine) {
+        lines.push(currentLine)
+      }
+      currentLine = word
+      return
+    }
+
+    currentLine = nextLine
+  })
+
+  if (currentLine) {
+    lines.push(currentLine)
+  }
+
+  return lines
+}
+
+function sanitizeFilename(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase()
+}
+
+function pdfColor(color: PdfColor) {
+  return color.map((value) => (value / 255).toFixed(3)).join(' ')
+}
+
+function buildPdfBlob(pages: PdfBlock[][]) {
+  const pageWidth = 612
+  const pageHeight = 792
+  const pageStreams = pages.map((blocks) =>
+    blocks
+      .map((block) => {
+        if (block.kind === 'rect') {
+          const parts = ['q']
+          if (block.lineWidth) {
+            parts.push(`${block.lineWidth} w`)
+          }
+          if (block.fillColor) {
+            parts.push(`${pdfColor(block.fillColor)} rg`)
+          }
+          if (block.strokeColor) {
+            parts.push(`${pdfColor(block.strokeColor)} RG`)
+          }
+          parts.push(`${block.x} ${block.y} ${block.width} ${block.height} re`)
+          parts.push(block.fillColor && block.strokeColor ? 'B' : block.fillColor ? 'f' : 'S')
+          parts.push('Q')
+          return parts.join('\n')
+        }
+
+        const fontName = block.bold ? 'F2' : 'F1'
+        const color = block.color ?? [31, 41, 55]
+        return `BT ${pdfColor(color)} rg /${fontName} ${block.size ?? 11} Tf 1 0 0 1 ${block.x} ${block.y} Tm (${sanitizePdfText(block.text)}) Tj ET`
+      })
+      .join('\n')
+  )
+
+  const objects: string[] = []
+  const pageObjectNumbers: number[] = []
+
+  objects.push('<< /Type /Catalog /Pages 2 0 R >>')
+  objects.push('')
+  objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>')
+  objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>')
+
+  pageStreams.forEach((stream) => {
+    const pageObjectNumber = objects.length + 1
+    const contentObjectNumber = objects.length + 2
+
+    pageObjectNumbers.push(pageObjectNumber)
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObjectNumber} 0 R >>`
+    )
+    objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`)
+  })
+
+  objects[1] = `<< /Type /Pages /Kids [${pageObjectNumbers.map((pageNumber) => `${pageNumber} 0 R`).join(' ')}] /Count ${pageObjectNumbers.length} >>`
+
+  let pdf = '%PDF-1.4\n'
+  const offsets: number[] = [0]
+
+  objects.forEach((objectContent, index) => {
+    offsets.push(pdf.length)
+    pdf += `${index + 1} 0 obj\n${objectContent}\nendobj\n`
+  })
+
+  const xrefStart = pdf.length
+  pdf += `xref\n0 ${objects.length + 1}\n`
+  pdf += '0000000000 65535 f \n'
+
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${offset.toString().padStart(10, '0')} 00000 n \n`
+  })
+
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`
+
+  return new Blob([pdf], { type: 'application/pdf' })
+}
+
+function addWrappedText(
+  blocks: PdfBlock[],
+  text: string,
+  x: number,
+  y: number,
+  options?: {
+    size?: number
+    color?: PdfColor
+    bold?: boolean
+    maxLength?: number
+    lineGap?: number
+  }
+) {
+  const lines = wrapPdfText(text, options?.maxLength ?? 50)
+  const size = options?.size ?? 11
+  const lineGap = options?.lineGap ?? 4
+
+  lines.forEach((line, index) => {
+    blocks.push({
+      kind: 'text',
+      text: line,
+      x,
+      y: y - index * (size + lineGap),
+      size,
+      color: options?.color,
+      bold: options?.bold,
+    })
+  })
+
+  return lines.length
+}
+
+function getWrappedTextHeight(
+  text: string,
+  options?: {
+    size?: number
+    maxLength?: number
+    lineGap?: number
+  }
+) {
+  const lines = wrapPdfText(text, options?.maxLength ?? 50)
+  const size = options?.size ?? 11
+  const lineGap = options?.lineGap ?? 4
+
+  return lines.length * size + Math.max(0, lines.length - 1) * lineGap
+}
+
+function getStatusPalette(status: Equipment['status']) {
+  if (status === 'Vermelho') {
+    return {
+      fill: [254, 242, 242] as PdfColor,
+      stroke: [248, 113, 113] as PdfColor,
+      text: [185, 28, 28] as PdfColor,
+    }
+  }
+
+  if (status === 'Amarelo') {
+    return {
+      fill: [255, 251, 235] as PdfColor,
+      stroke: [250, 204, 21] as PdfColor,
+      text: [161, 98, 7] as PdfColor,
+    }
+  }
+
+  return {
+    fill: [240, 253, 244] as PdfColor,
+    stroke: [74, 222, 128] as PdfColor,
+    text: [21, 128, 61] as PdfColor,
+  }
 }
 
 export function Dashboard() {
@@ -199,125 +411,227 @@ export function Dashboard() {
   }
 
   const handleExportOverviewPdf = () => {
-    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=1120,height=900')
-    if (!printWindow) {
-      return
-    }
-
-    const rankingRows = rankingData.slice(0, 5).map((item) => `
-      <tr>
-        <td>${item.rank}</td>
-        <td>${escapeHtml(item.equipmentName ?? item.systemName)}</td>
-        <td>${item.totalAlarms}</td>
-        <td>${item.criticalAlarms}</td>
-        <td>${item.healthScore}%</td>
-      </tr>
-    `).join('')
-
-    const equipmentRows = highlightedEquipment.map((equipment) => {
-      const justification = equipmentJustifications.get(equipment.id)
-      return `
-        <div class="equipment-card">
-          <h3>${escapeHtml(equipment.name)} <span>${escapeHtml(equipment.status)}</span></h3>
-          <p class="equipment-meta">${escapeHtml(equipment.area)} | Saude ${equipment.health}% | Disponibilidade ${equipment.availability}% | MTTR ${equipment.mttr.toFixed(1)}h</p>
-          <p class="summary">${escapeHtml(justification?.summary ?? '')}</p>
-          <ul>
-            ${(justification?.details ?? []).map((detail) => `<li>${escapeHtml(detail)}</li>`).join('')}
-          </ul>
-        </div>
-      `
-    }).join('')
-
-    const predictiveRows = mockPredictiveTasks.slice(0, 5).map((task) => `
-      <div class="insight-card">
-        <h4>${escapeHtml(task.equipmentName)}</h4>
-        <p>${escapeHtml(task.technicalAnalysis)}</p>
-      </div>
-    `).join('')
-
-    const followupRows = filteredAlarms
+    const followupAlarms = filteredAlarms
       .filter((alarm) => alarm.status === 'pending_followup')
       .slice(0, 8)
-      .map((alarm) => `
-        <li>${escapeHtml(alarm.equipmentName)} - ${escapeHtml(alarm.message)} (${escapeHtml(alarm.createdAt)})</li>
-      `)
-      .join('')
 
-    printWindow.document.write(`
-      <html lang="pt-BR">
-        <head>
-          <title>EMS - Overview Executivo</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 32px; color: #1f2937; }
-            h1 { margin: 0 0 6px; font-size: 28px; }
-            h2 { margin: 24px 0 12px; font-size: 18px; color: #502044; }
-            p { margin: 0; line-height: 1.5; }
-            .subtitle { color: #6b7280; margin-bottom: 18px; }
-            .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 18px; }
-            .kpi-card, .equipment-card, .insight-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px; background: #fff; }
-            .kpi-card strong { display: block; font-size: 28px; color: #111827; margin-top: 6px; }
-            table { width: 100%; border-collapse: collapse; }
-            th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; font-size: 13px; }
-            th { background: #f9fafb; }
-            .equipment-card h3 { display: flex; justify-content: space-between; margin: 0 0 8px; font-size: 16px; }
-            .equipment-card span { color: #a63056; font-size: 13px; }
-            .equipment-meta { color: #6b7280; font-size: 13px; }
-            .summary { margin-top: 10px; font-weight: 600; }
-            ul { margin: 10px 0 0 18px; padding: 0; }
-            li { margin-bottom: 6px; }
-            .section-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-            .footer { margin-top: 28px; font-size: 12px; color: #6b7280; }
-          </style>
-        </head>
-        <body>
-          <h1>EMS | Relatorio Gerencial</h1>
-          <p class="subtitle">Overview executivo do dashboard | Periodo: ${escapeHtml(selectedPeriodLabel)}</p>
+    const pageOne: PdfBlock[] = []
+    const detailPages: PdfBlock[][] = []
 
-          <div class="kpi-grid">
-            <div class="kpi-card"><p>Saude Geral</p><strong>${dashboardMetrics.averageHealth}%</strong></div>
-            <div class="kpi-card"><p>Disponibilidade</p><strong>${dashboardMetrics.averageAvailability}%</strong></div>
-            <div class="kpi-card"><p>MTTR</p><strong>${dashboardMetrics.mttr}h</strong></div>
-            <div class="kpi-card"><p>Ocorrencias</p><strong>${dashboardMetrics.totalOccurrences}</strong></div>
-          </div>
+    const createEquipmentPage = () => {
+      const page: PdfBlock[] = [
+        { kind: 'rect', x: 0, y: 720, width: 612, height: 72, fillColor: [80, 32, 68] },
+        { kind: 'text', text: 'Justificativas dos Equipamentos', x: 44, y: 752, size: 20, color: [255, 255, 255], bold: true },
+        { kind: 'text', text: 'Principais evidencias para apresentacao ao cliente', x: 44, y: 730, size: 11, color: [243, 244, 246] },
+      ]
 
-          <h2>Ranking de Alarmes</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Posicao</th>
-                <th>Equipamento</th>
-                <th>Total</th>
-                <th>Criticos</th>
-                <th>Saude</th>
-              </tr>
-            </thead>
-            <tbody>${rankingRows}</tbody>
-          </table>
+      detailPages.push(page)
+      return page
+    }
 
-          <h2>Justificativas dos Equipamentos</h2>
-          ${equipmentRows}
+    pageOne.push(
+      { kind: 'rect', x: 0, y: 682, width: 612, height: 110, fillColor: [80, 32, 68] },
+      { kind: 'rect', x: 0, y: 665, width: 612, height: 18, fillColor: [166, 48, 86] },
+      { kind: 'text', text: 'EMS | Relatorio Gerencial', x: 44, y: 742, size: 22, color: [255, 255, 255], bold: true },
+      { kind: 'text', text: 'Overview executivo do dashboard', x: 44, y: 718, size: 12, color: [243, 244, 246] },
+      { kind: 'text', text: `Periodo analisado: ${selectedPeriodLabel}`, x: 390, y: 742, size: 11, color: [255, 255, 255], bold: true },
+      { kind: 'text', text: `Gerado em ${new Date().toLocaleDateString('pt-BR')}`, x: 390, y: 720, size: 10, color: [229, 231, 235] }
+    )
 
-          <div class="section-grid">
-            <div>
-              <h2>Analises Preditivas</h2>
-              ${predictiveRows || '<p>Sem analises preditivas registradas.</p>'}
-            </div>
-            <div>
-              <h2>Alarmes com Follow-up</h2>
-              <ul>${followupRows || '<li>Nenhum follow-up pendente no periodo.</li>'}</ul>
-            </div>
-          </div>
+      const kpiCards = [
+        { label: 'Saude Geral', value: `${dashboardMetrics.averageHealth}%`, note: 'Equipamentos com ocorrencias', x: 44, y: 560 },
+        { label: 'Disponibilidade', value: `${dashboardMetrics.averageAvailability}%`, note: 'Media operacional do periodo', x: 314, y: 560 },
+        { label: 'MTTR', value: `${dashboardMetrics.mttr}h`, note: 'Tempo medio de resolucao', x: 44, y: 455 },
+        { label: 'Ocorrencias', value: `${dashboardMetrics.totalOccurrences}`, note: `${dashboardMetrics.affectedEquipment} equipamentos impactados`, x: 314, y: 455 },
+      ]
 
-          <p class="footer">Documento gerado automaticamente a partir do dashboard EMS.</p>
-          <script>
-            window.onload = function() {
-              window.print();
-            }
-          </script>
-        </body>
-      </html>
-    `)
-    printWindow.document.close()
+      kpiCards.forEach((card) => {
+        pageOne.push(
+          { kind: 'rect', x: card.x, y: card.y, width: 254, height: 86, fillColor: [255, 255, 255], strokeColor: [226, 232, 240], lineWidth: 1 },
+          { kind: 'rect', x: card.x, y: card.y + 72, width: 254, height: 14, fillColor: [248, 250, 252] },
+          { kind: 'text', text: card.label, x: card.x + 16, y: card.y + 56, size: 10, color: [100, 116, 139], bold: true },
+          { kind: 'text', text: card.value, x: card.x + 16, y: card.y + 28, size: 24, color: [15, 23, 42], bold: true },
+          { kind: 'text', text: card.note, x: card.x + 16, y: card.y + 12, size: 9, color: [100, 116, 139] }
+        )
+      })
+
+      pageOne.push(
+        { kind: 'text', text: 'Ranking de Alarmes', x: 44, y: 408, size: 16, color: [15, 23, 42], bold: true },
+        { kind: 'rect', x: 44, y: 150, width: 524, height: 236, fillColor: [255, 255, 255], strokeColor: [226, 232, 240], lineWidth: 1 },
+        { kind: 'rect', x: 44, y: 354, width: 524, height: 32, fillColor: [248, 250, 252] }
+      )
+
+      const tableHeaders = [
+        { text: 'Pos.', x: 58 },
+        { text: 'Equipamento', x: 100 },
+        { text: 'Alarmes', x: 340 },
+        { text: 'Criticos', x: 420 },
+        { text: 'Saude', x: 500 },
+      ]
+
+      tableHeaders.forEach((header) => {
+        pageOne.push({ kind: 'text', text: header.text, x: header.x, y: 366, size: 10, color: [71, 85, 105], bold: true })
+      })
+
+      rankingData.slice(0, 5).forEach((item, index) => {
+        const rowY = 330 - index * 36
+        pageOne.push({ kind: 'rect', x: 44, y: rowY - 10, width: 524, height: 1, fillColor: [241, 245, 249] })
+        pageOne.push({ kind: 'text', text: String(item.rank), x: 62, y: rowY + 8, size: 10, color: [15, 23, 42], bold: true })
+        addWrappedText(pageOne, item.equipmentName ?? item.systemName, 100, rowY + 8, { size: 10, color: [15, 23, 42], bold: index === 0, maxLength: 28, lineGap: 2 })
+        pageOne.push(
+          { kind: 'text', text: String(item.totalAlarms), x: 352, y: rowY + 8, size: 10, color: [15, 23, 42] },
+          { kind: 'text', text: String(item.criticalAlarms), x: 435, y: rowY + 8, size: 10, color: [185, 28, 28], bold: item.criticalAlarms > 0 },
+          { kind: 'text', text: `${item.healthScore}%`, x: 500, y: rowY + 8, size: 10, color: [15, 23, 42] }
+        )
+      })
+
+      pageOne.push(
+        { kind: 'text', text: 'Resumo Executivo', x: 44, y: 122, size: 16, color: [15, 23, 42], bold: true },
+        { kind: 'rect', x: 44, y: 46, width: 524, height: 58, fillColor: [248, 250, 252], strokeColor: [226, 232, 240], lineWidth: 1 }
+      )
+      addWrappedText(
+        pageOne,
+        `No periodo ${selectedPeriodLabel}, o dashboard consolidou ${dashboardMetrics.totalOccurrences} ocorrencias em ${dashboardMetrics.affectedEquipment} equipamentos, com saude media de ${dashboardMetrics.averageHealth}% e disponibilidade media de ${dashboardMetrics.averageAvailability}%.`,
+        58,
+        82,
+        { size: 10, color: [51, 65, 85], maxLength: 88, lineGap: 4 }
+      )
+
+      let currentDetailPage = createEquipmentPage()
+      let currentTopY = 688
+
+      highlightedEquipment.forEach((equipment) => {
+        const justification = equipmentJustifications.get(equipment.id)
+        const statusPalette = getStatusPalette(equipment.status)
+
+        const metaText = `${equipment.area} | Saude ${equipment.health}% | Disponibilidade ${equipment.availability}% | MTTR ${equipment.mttr.toFixed(1)}h | Ocorrencias ${equipment.totalOccurrences}`
+        const metaHeight = getWrappedTextHeight(metaText, { size: 10, maxLength: 78, lineGap: 3 })
+        const summaryText = justification?.summary ?? 'Sem justificativa disponivel.'
+        const summaryHeight = getWrappedTextHeight(summaryText, { size: 11, maxLength: 76, lineGap: 4 })
+        const detailHeights = (justification?.details ?? []).slice(0, 3).map((detail) =>
+          getWrappedTextHeight(`- ${detail}`, { size: 10, maxLength: 74, lineGap: 2 })
+        )
+        const detailsHeight = detailHeights.reduce((total, height) => total + height, 0)
+        const detailSpacing = Math.max(0, detailHeights.length - 1) * 8
+        const cardHeight = 30 + metaHeight + 14 + summaryHeight + 12 + detailsHeight + detailSpacing + 18
+
+        if (currentTopY - cardHeight < 130) {
+          currentDetailPage = createEquipmentPage()
+          currentTopY = 688
+        }
+
+        const cardY = currentTopY - cardHeight
+
+        currentDetailPage.push(
+          { kind: 'rect', x: 44, y: cardY, width: 524, height: cardHeight, fillColor: [255, 255, 255], strokeColor: [226, 232, 240], lineWidth: 1 },
+          { kind: 'text', text: equipment.name, x: 60, y: currentTopY - 26, size: 15, color: [15, 23, 42], bold: true },
+          { kind: 'rect', x: 455, y: currentTopY - 38, width: 95, height: 22, fillColor: statusPalette.fill, strokeColor: statusPalette.stroke, lineWidth: 1 },
+          { kind: 'text', text: equipment.status, x: 482, y: currentTopY - 31, size: 10, color: statusPalette.text, bold: true }
+        )
+
+        let contentY = currentTopY - 52
+        addWrappedText(currentDetailPage, metaText, 60, contentY, {
+          size: 10,
+          color: [100, 116, 139],
+          maxLength: 78,
+          lineGap: 3,
+        })
+        contentY -= metaHeight + 14
+
+        addWrappedText(currentDetailPage, summaryText, 60, contentY, {
+          size: 11,
+          color: [31, 41, 55],
+          bold: true,
+          maxLength: 76,
+          lineGap: 4,
+        })
+        contentY -= summaryHeight + 12
+
+        ;(justification?.details ?? []).slice(0, 3).forEach((detail) => {
+          const detailText = `- ${detail}`
+          const detailHeight = getWrappedTextHeight(detailText, { size: 10, maxLength: 74, lineGap: 2 })
+          addWrappedText(currentDetailPage, detailText, 72, contentY, {
+            size: 10,
+            color: [71, 85, 105],
+            maxLength: 74,
+            lineGap: 2,
+          })
+          contentY -= detailHeight + 8
+        })
+
+        currentTopY = cardY - 24
+      })
+
+      const pageThree: PdfBlock[] = [
+        { kind: 'rect', x: 0, y: 720, width: 612, height: 72, fillColor: [80, 32, 68] },
+        { kind: 'text', text: 'Complementos do Overview', x: 44, y: 752, size: 20, color: [255, 255, 255], bold: true },
+        { kind: 'text', text: 'Analises preditivas e follow-up para encaminhamento', x: 44, y: 730, size: 11, color: [243, 244, 246] },
+        { kind: 'text', text: 'Analises Preditivas', x: 44, y: 660, size: 16, color: [15, 23, 42], bold: true },
+        { kind: 'rect', x: 44, y: 382, width: 252, height: 250, fillColor: [255, 255, 255], strokeColor: [226, 232, 240], lineWidth: 1 },
+        { kind: 'text', text: 'Alarmes com Follow-up', x: 316, y: 660, size: 16, color: [15, 23, 42], bold: true },
+        { kind: 'rect', x: 316, y: 382, width: 252, height: 250, fillColor: [255, 255, 255], strokeColor: [226, 232, 240], lineWidth: 1 },
+      ]
+
+      if (mockPredictiveTasks.length === 0) {
+        addWrappedText(pageThree, 'Sem analises preditivas registradas.', 58, 606, {
+          size: 10,
+          color: [71, 85, 105],
+          maxLength: 34,
+          lineGap: 3,
+        })
+      } else {
+        let predictiveY = 606
+        mockPredictiveTasks.slice(0, 3).forEach((task) => {
+          const predictiveText = `${task.equipmentName}: ${task.technicalAnalysis}`
+          const predictiveHeight = getWrappedTextHeight(predictiveText, { size: 10, maxLength: 34, lineGap: 3 })
+
+          addWrappedText(pageThree, predictiveText, 58, predictiveY, {
+            size: 10,
+            color: [71, 85, 105],
+            maxLength: 34,
+            lineGap: 3,
+          })
+          predictiveY -= predictiveHeight + 16
+        })
+      }
+
+      if (followupAlarms.length === 0) {
+        addWrappedText(pageThree, 'Nenhum follow-up pendente no periodo.', 330, 606, {
+          size: 10,
+          color: [71, 85, 105],
+          maxLength: 34,
+          lineGap: 3,
+        })
+      } else {
+        let followupY = 606
+        followupAlarms.slice(0, 3).forEach((alarm) => {
+          const followupText = `${alarm.equipmentName}: ${alarm.message}`
+          const followupHeight = getWrappedTextHeight(followupText, { size: 10, maxLength: 34, lineGap: 3 })
+
+          addWrappedText(pageThree, followupText, 330, followupY, {
+            size: 10,
+            color: [71, 85, 105],
+            maxLength: 34,
+            lineGap: 3,
+          })
+          followupY -= followupHeight + 16
+        })
+      }
+
+      pageThree.push(
+        { kind: 'text', text: 'Documento gerado automaticamente a partir do dashboard EMS.', x: 44, y: 88, size: 10, color: [100, 116, 139] }
+      )
+
+    const pdfBlob = buildPdfBlob([pageOne, ...detailPages, pageThree])
+    const fileName = `ems-overview-${sanitizeFilename(selectedPeriodLabel || 'periodo')}.pdf`
+    const downloadUrl = URL.createObjectURL(pdfBlob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000)
   }
 
   return (
