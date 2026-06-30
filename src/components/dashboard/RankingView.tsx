@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { ArrowUp, ArrowDown, Minus } from 'lucide-react'
 import { SystemRanking } from '../../types'
 
@@ -27,9 +28,16 @@ export function RankingView({ rankings }: RankingViewProps) {
           }
 
           const healthColor = system.healthScore >= 90 ? 'text-success' : system.healthScore >= 80 ? 'text-warning' : 'text-danger'
+          const targetUrl = system.equipmentId
+            ? `/alarms?equipmentId=${encodeURIComponent(system.equipmentId)}&equipmentName=${encodeURIComponent(system.equipmentName ?? system.systemName)}`
+            : '/alarms'
 
           return (
-            <div key={system.id} className="flex items-center justify-between p-4 border border-gray-100 rounded-lg hover:bg-gray-50 transition-colors">
+            <Link
+              key={system.id}
+              to={targetUrl}
+              className="flex items-center justify-between p-4 border border-gray-100 rounded-lg hover:bg-gray-50 transition-colors"
+            >
               <div className="flex items-center gap-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${system.rank === 1 ? 'bg-danger' : system.rank === 2 ? 'bg-warning' : 'bg-neutral'}`}>
                   {system.rank}
@@ -58,7 +66,7 @@ export function RankingView({ rankings }: RankingViewProps) {
                   <span className={trendColor}>{system.trend === 'up' ? 'Melhorando' : system.trend === 'down' ? 'Piorando' : 'Estavel'}</span>
                 </div>
               </div>
-            </div>
+            </Link>
           )
         })}
       </div>

@@ -100,6 +100,8 @@ export interface PredictiveTask {
 
 export interface SystemRanking {
   id: string
+  equipmentId?: string
+  equipmentName?: string
   clientName: string
   systemName: string
   totalAlarms: number

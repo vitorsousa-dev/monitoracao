@@ -116,6 +116,8 @@ export function Dashboard() {
   const rankingData = useMemo<SystemRanking[]>(() => {
     return aggregatedEquipment.map((equipment, index) => ({
       id: equipment.id,
+      equipmentId: equipment.id,
+      equipmentName: equipment.name,
       clientName: equipment.client,
       systemName: `${equipment.area} • ${equipment.name}`,
       totalAlarms: equipment.totalOccurrences,

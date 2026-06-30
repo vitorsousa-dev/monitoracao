@@ -1,11 +1,22 @@
+import { useMemo } from 'react'
 import { Alarm } from '../../types'
 import { AlertTriangle, AlertCircle, Info, CheckCircle, Clock } from 'lucide-react'
 
 interface AlarmsListProps {
   alarms: Alarm[]
+  selectedEquipmentId?: string
+  selectedEquipmentName?: string
 }
 
-export function AlarmsList({ alarms }: AlarmsListProps) {
+export function AlarmsList({ alarms, selectedEquipmentId, selectedEquipmentName }: AlarmsListProps) {
+  const filteredAlarms = useMemo(() => {
+    if (!selectedEquipmentId) {
+      return alarms
+    }
+
+    return alarms.filter((alarm) => alarm.equipmentId === selectedEquipmentId)
+  }, [alarms, selectedEquipmentId])
+
   const getStatusIcon = (status: Alarm['status']) => {
     switch (status) {
       case 'resolved':
@@ -58,9 +69,16 @@ export function AlarmsList({ alarms }: AlarmsListProps) {
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Todos os Alarmes</h3>
+      <div className="mb-4">
+        <h3 className="text-lg font-semibold text-gray-900">Todos os Alarmes</h3>
+        {selectedEquipmentId && (
+          <p className="text-sm text-gray-500 mt-1">
+            Exibindo detalhes de alarme para {selectedEquipmentName}
+          </p>
+        )}
+      </div>
       <div className="space-y-3">
-        {alarms.map((alarm) => (
+        {filteredAlarms.map((alarm) => (
           <div key={alarm.id} className={`p-4 rounded-lg border transition-colors ${getTypeColor(alarm.type)}`}>
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3">
@@ -91,6 +109,11 @@ export function AlarmsList({ alarms }: AlarmsListProps) {
             </div>
           </div>
         ))}
+        {filteredAlarms.length === 0 && (
+          <div className="p-6 rounded-lg border border-dashed border-gray-200 text-center text-sm text-gray-500">
+            Nenhum alarme encontrado para o equipamento selecionado.
+          </div>
+        )}
       </div>
     </div>
   )
