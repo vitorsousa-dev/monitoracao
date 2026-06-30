@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Lock, User } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import { SmartNetworkBackground } from '@/components/layout/SmartNetworkBackground'
 
 export function Login() {
   const [email, setEmail] = useState('')
@@ -65,10 +64,8 @@ export function Login() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#090C12] p-4">
-      <SmartNetworkBackground />
-
-      <div className="relative z-10 flex min-h-screen items-center justify-center">
+    <div className="min-h-screen bg-white p-4">
+      <div className="flex min-h-screen items-center justify-center">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex flex-col items-center justify-center mb-4">
@@ -80,13 +77,13 @@ export function Login() {
           </div>
         </div>
         
-        <div className="rounded-2xl border border-white/10 bg-white/96 p-8 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-lg">
           <div className="flex gap-2 mb-6">
             <button
               type="button"
               onClick={() => setIsRegisterMode(false)}
               className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                !isRegisterMode ? 'bg-primary text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                !isRegisterMode ? 'bg-[#2A6CF8] text-white hover:bg-[#1f5fe8]' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Entrar
@@ -95,7 +92,7 @@ export function Login() {
               type="button"
               onClick={() => setIsRegisterMode(true)}
               className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                isRegisterMode ? 'bg-primary text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                isRegisterMode ? 'bg-[#2A6CF8] text-white hover:bg-[#1f5fe8]' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Criar Usuario
@@ -124,7 +121,7 @@ export function Login() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  className="w-full rounded-lg border border-gray-200 py-3 pl-10 pr-4 focus:border-[#2A6CF8] focus:outline-none focus:ring-2 focus:ring-[#2A6CF8]/20"
                   placeholder="seu@email.com"
                   required
                 />
@@ -139,7 +136,7 @@ export function Login() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  className="w-full rounded-lg border border-gray-200 py-3 pl-10 pr-4 focus:border-[#2A6CF8] focus:outline-none focus:ring-2 focus:ring-[#2A6CF8]/20"
                   placeholder="••••••••"
                   required
                 />
@@ -149,7 +146,7 @@ export function Login() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-primary hover:bg-primary/90 text-white font-medium py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full rounded-lg bg-[#2A6CF8] px-4 py-3 font-medium text-white transition-colors hover:bg-[#1f5fe8] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading ? 'Entrando...' : 'Entrar'}
             </button>
@@ -162,7 +159,7 @@ export function Login() {
                   type="text"
                   value={registerName}
                   onChange={(e) => setRegisterName(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  className="w-full rounded-lg border border-gray-200 px-4 py-3 focus:border-[#2A6CF8] focus:outline-none focus:ring-2 focus:ring-[#2A6CF8]/20"
                   placeholder="Nome completo"
                   required
                 />
@@ -174,7 +171,7 @@ export function Login() {
                   type="email"
                   value={registerEmail}
                   onChange={(e) => setRegisterEmail(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  className="w-full rounded-lg border border-gray-200 px-4 py-3 focus:border-[#2A6CF8] focus:outline-none focus:ring-2 focus:ring-[#2A6CF8]/20"
                   placeholder="email@empresa.com"
                   required
                 />
@@ -186,7 +183,7 @@ export function Login() {
                   type="password"
                   value={registerPassword}
                   onChange={(e) => setRegisterPassword(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  className="w-full rounded-lg border border-gray-200 px-4 py-3 focus:border-[#2A6CF8] focus:outline-none focus:ring-2 focus:ring-[#2A6CF8]/20"
                   placeholder="Defina uma senha"
                   required
                 />
@@ -198,7 +195,7 @@ export function Login() {
 
               <button
                 type="submit"
-                className="w-full bg-primary hover:bg-primary/90 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                className="w-full rounded-lg bg-[#2A6CF8] px-4 py-3 font-medium text-white transition-colors hover:bg-[#1f5fe8]"
               >
                 Criar Usuario
               </button>
