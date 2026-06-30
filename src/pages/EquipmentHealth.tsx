@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { EquipmentCard } from '@/components/equipment/EquipmentCard'
 import { EquipmentFilters } from '@/components/equipment/EquipmentFilters'
-import { mockEquipment } from '@/lib/mockData'
+import { mockAlarms, mockEquipment, mockPredictiveTasks } from '@/lib/mockData'
+import { buildEquipmentJustification } from '@/lib/utils'
 
 export function EquipmentHealth() {
   const [searchTerm, setSearchTerm] = useState('')
@@ -63,7 +64,11 @@ export function EquipmentHealth() {
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredEquipment.map(equipment => (
-            <EquipmentCard key={equipment.id} equipment={equipment} />
+            <EquipmentCard
+              key={equipment.id}
+              equipment={equipment}
+              justification={buildEquipmentJustification(equipment, mockAlarms, mockPredictiveTasks)}
+            />
           ))}
           {filteredEquipment.length === 0 && (
             <div className="col-span-full text-center py-12">

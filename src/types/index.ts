@@ -17,6 +17,11 @@ export interface Equipment {
   lastUpdated: string
 }
 
+export interface EquipmentJustification {
+  summary: string
+  details: string[]
+}
+
 export interface WeeklyUpdate {
   id: string
   date: string

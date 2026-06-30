@@ -12,11 +12,21 @@ import {
   mockMonthlySummaries,
   mockMonthlyEquipmentSnapshots,
   mockWeeklyUpdates,
-  mockAlarms
+  mockAlarms,
+  mockPredictiveTasks
 } from '@/lib/mockData'
-import { Equipment, SystemRanking } from '@/types'
-import { getHealthStatusText } from '@/lib/utils'
-import { TrendingUp, TrendingDown, Activity, AlertTriangle, Minus } from 'lucide-react'
+import { Equipment, EquipmentJustification, SystemRanking } from '@/types'
+import { buildEquipmentJustification, getHealthStatusText } from '@/lib/utils'
+import { TrendingUp, TrendingDown, Activity, AlertTriangle, Minus, Printer } from 'lucide-react'
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
 
 export function Dashboard() {
   const availableMonths = mockMonthlySummaries
@@ -138,6 +148,20 @@ export function Dashboard() {
     return mockAlarms.filter((alarm) => monthKeys.has(alarm.createdAt.slice(0, 7)))
   }, [selectedSummaries])
 
+  const highlightedEquipment = useMemo(
+    () => (aggregatedEquipment.length > 0 ? aggregatedEquipment : mockEquipment.slice(0, 3)).slice(0, 3),
+    [aggregatedEquipment]
+  )
+
+  const equipmentJustifications = useMemo(() => {
+    const entries: Array<[string, EquipmentJustification]> = highlightedEquipment.map((equipment) => [
+      equipment.id,
+      buildEquipmentJustification(equipment, filteredAlarms, mockPredictiveTasks),
+    ])
+
+    return new Map<string, EquipmentJustification>(entries)
+  }, [filteredAlarms, highlightedEquipment])
+
   const currentSummary = selectedSummaries[selectedSummaries.length - 1]
   const currentSummaryIndex = currentSummary
     ? mockMonthlySummaries.findIndex((summary) => summary.monthKey === currentSummary.monthKey)
@@ -146,6 +170,9 @@ export function Dashboard() {
 
   const availabilityDelta = previousSummary ? Number((currentSummary.availability - previousSummary.availability).toFixed(2)) : 0
   const mttrDelta = previousSummary ? Number((currentSummary.mttr - previousSummary.mttr).toFixed(2)) : 0
+  const selectedPeriodLabel = selectedSummaries.length > 0
+    ? `${selectedSummaries[0].month} a ${selectedSummaries[selectedSummaries.length - 1].month}`
+    : 'Periodo sem dados'
 
   const renderTrend = (delta: number, reverseGood = false) => {
     if (delta === 0) {
@@ -169,6 +196,128 @@ export function Dashboard() {
         <span className="text-sm font-medium">{signal}{delta}{reverseGood ? 'h' : '%'}</span>
       </div>
     )
+  }
+
+  const handleExportOverviewPdf = () => {
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=1120,height=900')
+    if (!printWindow) {
+      return
+    }
+
+    const rankingRows = rankingData.slice(0, 5).map((item) => `
+      <tr>
+        <td>${item.rank}</td>
+        <td>${escapeHtml(item.equipmentName ?? item.systemName)}</td>
+        <td>${item.totalAlarms}</td>
+        <td>${item.criticalAlarms}</td>
+        <td>${item.healthScore}%</td>
+      </tr>
+    `).join('')
+
+    const equipmentRows = highlightedEquipment.map((equipment) => {
+      const justification = equipmentJustifications.get(equipment.id)
+      return `
+        <div class="equipment-card">
+          <h3>${escapeHtml(equipment.name)} <span>${escapeHtml(equipment.status)}</span></h3>
+          <p class="equipment-meta">${escapeHtml(equipment.area)} | Saude ${equipment.health}% | Disponibilidade ${equipment.availability}% | MTTR ${equipment.mttr.toFixed(1)}h</p>
+          <p class="summary">${escapeHtml(justification?.summary ?? '')}</p>
+          <ul>
+            ${(justification?.details ?? []).map((detail) => `<li>${escapeHtml(detail)}</li>`).join('')}
+          </ul>
+        </div>
+      `
+    }).join('')
+
+    const predictiveRows = mockPredictiveTasks.slice(0, 5).map((task) => `
+      <div class="insight-card">
+        <h4>${escapeHtml(task.equipmentName)}</h4>
+        <p>${escapeHtml(task.technicalAnalysis)}</p>
+      </div>
+    `).join('')
+
+    const followupRows = filteredAlarms
+      .filter((alarm) => alarm.status === 'pending_followup')
+      .slice(0, 8)
+      .map((alarm) => `
+        <li>${escapeHtml(alarm.equipmentName)} - ${escapeHtml(alarm.message)} (${escapeHtml(alarm.createdAt)})</li>
+      `)
+      .join('')
+
+    printWindow.document.write(`
+      <html lang="pt-BR">
+        <head>
+          <title>EMS - Overview Executivo</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 32px; color: #1f2937; }
+            h1 { margin: 0 0 6px; font-size: 28px; }
+            h2 { margin: 24px 0 12px; font-size: 18px; color: #502044; }
+            p { margin: 0; line-height: 1.5; }
+            .subtitle { color: #6b7280; margin-bottom: 18px; }
+            .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 18px; }
+            .kpi-card, .equipment-card, .insight-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px; background: #fff; }
+            .kpi-card strong { display: block; font-size: 28px; color: #111827; margin-top: 6px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; font-size: 13px; }
+            th { background: #f9fafb; }
+            .equipment-card h3 { display: flex; justify-content: space-between; margin: 0 0 8px; font-size: 16px; }
+            .equipment-card span { color: #a63056; font-size: 13px; }
+            .equipment-meta { color: #6b7280; font-size: 13px; }
+            .summary { margin-top: 10px; font-weight: 600; }
+            ul { margin: 10px 0 0 18px; padding: 0; }
+            li { margin-bottom: 6px; }
+            .section-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+            .footer { margin-top: 28px; font-size: 12px; color: #6b7280; }
+          </style>
+        </head>
+        <body>
+          <h1>EMS | Relatorio Gerencial</h1>
+          <p class="subtitle">Overview executivo do dashboard | Periodo: ${escapeHtml(selectedPeriodLabel)}</p>
+
+          <div class="kpi-grid">
+            <div class="kpi-card"><p>Saude Geral</p><strong>${dashboardMetrics.averageHealth}%</strong></div>
+            <div class="kpi-card"><p>Disponibilidade</p><strong>${dashboardMetrics.averageAvailability}%</strong></div>
+            <div class="kpi-card"><p>MTTR</p><strong>${dashboardMetrics.mttr}h</strong></div>
+            <div class="kpi-card"><p>Ocorrencias</p><strong>${dashboardMetrics.totalOccurrences}</strong></div>
+          </div>
+
+          <h2>Ranking de Alarmes</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Posicao</th>
+                <th>Equipamento</th>
+                <th>Total</th>
+                <th>Criticos</th>
+                <th>Saude</th>
+              </tr>
+            </thead>
+            <tbody>${rankingRows}</tbody>
+          </table>
+
+          <h2>Justificativas dos Equipamentos</h2>
+          ${equipmentRows}
+
+          <div class="section-grid">
+            <div>
+              <h2>Analises Preditivas</h2>
+              ${predictiveRows || '<p>Sem analises preditivas registradas.</p>'}
+            </div>
+            <div>
+              <h2>Alarmes com Follow-up</h2>
+              <ul>${followupRows || '<li>Nenhum follow-up pendente no periodo.</li>'}</ul>
+            </div>
+          </div>
+
+          <p class="footer">Documento gerado automaticamente a partir do dashboard EMS.</p>
+          <script>
+            window.onload = function() {
+              window.print();
+            }
+          </script>
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
   }
 
   return (
@@ -212,6 +361,13 @@ export function Dashboard() {
                 </select>
               </div>
             </div>
+            <button
+              onClick={handleExportOverviewPdf}
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
+            >
+              <Printer className="h-4 w-4" />
+              Exportar overview em PDF
+            </button>
             {currentSummary && (
               <p className="mt-3 text-xs text-gray-500">
                 Dados disponíveis de {selectedSummaries[0]?.startDate} até {currentSummary.endDate}
@@ -271,8 +427,12 @@ export function Dashboard() {
               <Activity className="h-5 w-5 text-gray-500" />
             </div>
             <div className="space-y-4">
-              {(aggregatedEquipment.length > 0 ? aggregatedEquipment : mockEquipment.slice(0, 3)).slice(0, 3).map(equipment => (
-                <EquipmentCard key={equipment.id} equipment={equipment} />
+              {highlightedEquipment.map(equipment => (
+                <EquipmentCard
+                  key={equipment.id}
+                  equipment={equipment}
+                  justification={equipmentJustifications.get(equipment.id)}
+                />
               ))}
             </div>
           </div>

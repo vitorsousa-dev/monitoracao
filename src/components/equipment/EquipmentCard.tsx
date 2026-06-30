@@ -1,14 +1,15 @@
 import { Link } from 'react-router-dom'
 import { Thermometer, Clock, AlertTriangle, CheckCircle } from 'lucide-react'
-import { Equipment } from '@/types'
+import { Equipment, EquipmentJustification } from '@/types'
 import { EquipmentStatusBadge } from './EquipmentStatusBadge'
 import { getHealthStatusColor } from '@/lib/utils'
 
 interface EquipmentCardProps {
   equipment: Equipment
+  justification?: EquipmentJustification
 }
 
-export function EquipmentCard({ equipment }: EquipmentCardProps) {
+export function EquipmentCard({ equipment, justification }: EquipmentCardProps) {
   return (
     <Link
       to={`/equipment/${equipment.id}`}
@@ -66,6 +67,18 @@ export function EquipmentCard({ equipment }: EquipmentCardProps) {
             <p className="text-xs text-gray-500">Ocorrências</p>
           </div>
         </div>
+
+        {justification && (
+          <div className="pt-4 border-t border-gray-100">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Justificativa</p>
+            <p className="mt-2 text-sm text-gray-700">{justification.summary}</p>
+            <ul className="mt-2 space-y-1 text-xs text-gray-600">
+              {justification.details.map((detail) => (
+                <li key={detail}>- {detail}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </Link>
   )
