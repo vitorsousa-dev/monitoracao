@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Lock, User } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { SmartNetworkBackground } from '@/components/layout/SmartNetworkBackground'
 
 export function Login() {
   const [email, setEmail] = useState('')
@@ -64,7 +65,10 @@ export function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#502044] via-[#7a2850] to-[#a63056] flex items-center justify-center p-4">
+    <div className="relative min-h-screen overflow-hidden bg-[#090C12] p-4">
+      <SmartNetworkBackground />
+
+      <div className="relative z-10 flex min-h-screen items-center justify-center">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex flex-col items-center justify-center mb-4">
@@ -76,7 +80,7 @@ export function Login() {
           </div>
         </div>
         
-        <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-200">
+        <div className="rounded-2xl border border-white/10 bg-white/96 p-8 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-sm">
           <div className="flex gap-2 mb-6">
             <button
               type="button"
@@ -207,6 +211,7 @@ export function Login() {
             </p>
           </div>
         </div>
+      </div>
       </div>
     </div>
   )
