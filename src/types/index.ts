@@ -40,9 +40,10 @@ export interface User {
   id: string
   name: string
   email: string
-  role: 'admin' | 'manager' | 'technician'
+  role: 'admin' | 'manager' | 'viewer'
   password: string
   createdAt: string
+  clientAccess: string[]
 }
 
 export interface Alarm {

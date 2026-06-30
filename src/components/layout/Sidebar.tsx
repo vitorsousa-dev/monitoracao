@@ -4,13 +4,13 @@ import {
   Thermometer, 
   Calendar, 
   Settings,
-  Activity,
   AlertTriangle,
   TrendingUp,
   Droplets,
   Users
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/hooks/useAuth'
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -18,26 +18,33 @@ const navItems = [
   { path: '/alarms', label: 'Alarmes', icon: AlertTriangle },
   { path: '/predictive', label: 'Manutenção Preditiva', icon: TrendingUp },
   { path: '/sustainability', label: 'Sustentabilidade', icon: Droplets },
-  { path: '/users', label: 'Usuários', icon: Users },
+  { path: '/users', label: 'Usuários', icon: Users, adminOnly: true },
   { path: '/updates', label: 'Atualizações Semanais', icon: Calendar },
-  { path: '/settings', label: 'Configurações', icon: Settings },
+  { path: '/settings', label: 'Configurações', icon: Settings, adminOnly: true },
 ]
 
 export function Sidebar() {
+  const { canManageUsers } = useAuth()
+  const visibleNavItems = navItems.filter((item) => !item.adminOnly || canManageUsers)
+
   return (
     <aside className="w-64 bg-white border-r border-gray-200 min-h-screen flex flex-col">
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center gap-3">
-          <Activity className="h-8 w-8 text-primary" />
+          <img
+            src="/ems-logo.png"
+            alt="EMS"
+            className="h-8 w-auto object-contain"
+          />
           <div>
-            <h1 className="text-xl font-bold text-gray-900">HVAC Monitor</h1>
-            <p className="text-xs text-gray-500">Sistema de Monitoramento</p>
+            <h1 className="text-xl font-bold text-gray-900">EMS</h1>
+            <p className="text-xs text-gray-500">Relatório Gerencial</p>
           </div>
         </div>
       </div>
       
       <nav className="flex-1 p-4 space-y-2">
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}

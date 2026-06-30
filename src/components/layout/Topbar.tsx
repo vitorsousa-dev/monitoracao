@@ -3,6 +3,13 @@ import { useAuth } from '@/hooks/useAuth'
 
 export function Topbar() {
   const { user, logout } = useAuth()
+  const roleLabel =
+    user?.role === 'admin'
+      ? 'Administrador'
+      : user?.role === 'manager'
+        ? 'Gerente'
+        : 'Usuario Comum'
+  const accessLabel = user?.role === 'admin' ? 'Todos os clientes' : user?.clientAccess.join(', ')
 
   return (
     <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6">
@@ -26,7 +33,8 @@ export function Topbar() {
         <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
           <div className="text-right hidden sm:block">
             <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-            <p className="text-xs text-gray-500">{user?.role}</p>
+            <p className="text-xs text-gray-500">{roleLabel}</p>
+            <p className="text-[11px] text-gray-400">{accessLabel}</p>
           </div>
           <div className="h-10 w-10 bg-primary/10 text-primary rounded-full flex items-center justify-center">
             <User className="h-5 w-5" />

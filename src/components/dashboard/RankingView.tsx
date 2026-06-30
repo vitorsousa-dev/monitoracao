@@ -8,7 +8,7 @@ interface RankingViewProps {
 export function RankingView({ rankings }: RankingViewProps) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Ranking de Sistemas com Mais Problemas</h3>
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">Ranking de Equipamentos com Mais Alarmes</h3>
       <div className="space-y-3">
         {rankings.map((system) => {
           let trendIcon, trendColor

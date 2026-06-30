@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { WeeklyUpdateCard } from '@/components/updates/WeeklyUpdateCard'
 import { UpdateForm } from '@/components/updates/UpdateForm'
+import { useAuth } from '@/hooks/useAuth'
 import { mockWeeklyUpdates } from '@/lib/mockData'
 import { WeeklyUpdate } from '@/types'
 
 export function WeeklyUpdates() {
   const [updates, setUpdates] = useState<WeeklyUpdate[]>(mockWeeklyUpdates)
+  const { canEditPlatform } = useAuth()
 
   const handleAddUpdate = (title: string, content: string) => {
     const newUpdate: WeeklyUpdate = {
@@ -27,7 +29,13 @@ export function WeeklyUpdates() {
           <p className="text-gray-500">Registro de atividades e manutenções</p>
         </div>
         
-        <UpdateForm onSubmit={handleAddUpdate} />
+        {canEditPlatform ? (
+          <UpdateForm onSubmit={handleAddUpdate} />
+        ) : (
+          <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
+            Seu perfil possui acesso somente leitura para as atualizacoes semanais.
+          </div>
+        )}
         
         <div className="space-y-4">
           {updates.map(update => (

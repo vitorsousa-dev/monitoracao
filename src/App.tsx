@@ -11,8 +11,24 @@ import { PredictiveMaintenance } from './pages/PredictiveMaintenance'
 import { Sustainability } from './pages/Sustainability'
 import { Users } from './pages/Users'
 
+function ProtectedRoute({
+  allowedRoles,
+  children,
+}: {
+  allowedRoles: Array<'admin' | 'manager' | 'viewer'>
+  children: JSX.Element
+}) {
+  const { user } = useAuth()
+
+  if (!user || !allowedRoles.includes(user.role)) {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  return children
+}
+
 function App() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
 
   if (!isAuthenticated) {
     return <Login />
@@ -27,9 +43,27 @@ function App() {
       <Route path="/alarms" element={<Alarms />} />
       <Route path="/predictive" element={<PredictiveMaintenance />} />
       <Route path="/sustainability" element={<Sustainability />} />
-      <Route path="/users" element={<Users />} />
+      <Route
+        path="/users"
+        element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <Users />
+          </ProtectedRoute>
+        }
+      />
       <Route path="/updates" element={<WeeklyUpdates />} />
-      <Route path="/settings" element={<Settings />} />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <Settings />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="*"
+        element={<Navigate to={user?.role === 'admin' ? '/dashboard' : '/dashboard'} replace />}
+      />
     </Routes>
   )
 }

@@ -1,47 +1,116 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Activity, Lock, User } from 'lucide-react'
+import { Lock, User } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 
 export function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [registerName, setRegisterName] = useState('')
+  const [registerEmail, setRegisterEmail] = useState('')
+  const [registerPassword, setRegisterPassword] = useState('')
+  const [isRegisterMode, setIsRegisterMode] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const { login } = useAuth()
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
+  const [feedbackType, setFeedbackType] = useState<'error' | 'success' | null>(null)
+  const { login, registerUser } = useAuth()
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    setFeedbackMessage(null)
+    setFeedbackType(null)
     
     try {
       const success = await login(email, password)
       if (success) {
         navigate('/dashboard')
+      } else {
+        setFeedbackType('error')
+        setFeedbackMessage('Credenciais invalidas. Verifique email e senha.')
       }
     } catch (error) {
       console.error('Login failed:', error)
+      setFeedbackType('error')
+      setFeedbackMessage('Nao foi possivel realizar o login.')
     } finally {
       setIsLoading(false)
     }
   }
 
+  const handleRegister = (e: React.FormEvent) => {
+    e.preventDefault()
+    setFeedbackMessage(null)
+    setFeedbackType(null)
+
+    const result = registerUser({
+      name: registerName,
+      email: registerEmail,
+      password: registerPassword,
+    })
+
+    setFeedbackType(result.success ? 'success' : 'error')
+    setFeedbackMessage(result.message)
+
+    if (result.success) {
+      setEmail(registerEmail)
+      setPassword('')
+      setRegisterName('')
+      setRegisterEmail('')
+      setRegisterPassword('')
+      setIsRegisterMode(false)
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 to-primary/10 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#502044] via-[#7a2850] to-[#a63056] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <Activity className="h-12 w-12 text-primary" />
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">HVAC Monitor</h1>
-            <p className="text-gray-500">Sistema de Monitoramento</p>
+          <div className="flex flex-col items-center justify-center mb-4">
+            <img
+              src="/ems-logo.png"
+              alt="EMS"
+              className="h-[17.5rem] w-auto max-w-[520px] object-contain mx-auto"
+            />
           </div>
         </div>
-        <h2 className="text-2xl font-semibold text-gray-900 mb-2">Bem-vindo de volta</h2>
-        <p className="text-gray-500">Entre com suas credenciais</p>
-      </div>
         
         <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-200">
+          <div className="flex gap-2 mb-6">
+            <button
+              type="button"
+              onClick={() => setIsRegisterMode(false)}
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                !isRegisterMode ? 'bg-primary text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Entrar
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsRegisterMode(true)}
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                isRegisterMode ? 'bg-primary text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Criar Usuario
+            </button>
+          </div>
+
+          {feedbackMessage && (
+            <div
+              className={`mb-6 rounded-lg px-4 py-3 text-sm ${
+                feedbackType === 'success'
+                  ? 'bg-success/10 text-success'
+                  : 'bg-danger/10 text-danger'
+              }`}
+            >
+              {feedbackMessage}
+            </div>
+          )}
+
+          {!isRegisterMode ? (
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
@@ -81,10 +150,60 @@ export function Login() {
               {isLoading ? 'Entrando...' : 'Entrar'}
             </button>
           </form>
+          ) : (
+            <form onSubmit={handleRegister} className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Nome</label>
+                <input
+                  type="text"
+                  value={registerName}
+                  onChange={(e) => setRegisterName(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  placeholder="Nome completo"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                <input
+                  type="email"
+                  value={registerEmail}
+                  onChange={(e) => setRegisterEmail(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  placeholder="email@empresa.com"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Senha</label>
+                <input
+                  type="password"
+                  value={registerPassword}
+                  onChange={(e) => setRegisterPassword(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  placeholder="Defina uma senha"
+                  required
+                />
+              </div>
+
+              <div className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-gray-700">
+                Novos cadastros criados por esta tela entram como usuario comum com acesso de leitura ao cliente Serasa Experian.
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-primary hover:bg-primary/90 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+              >
+                Criar Usuario
+              </button>
+            </form>
+          )}
           
           <div className="mt-6 pt-6 border-t border-gray-200">
             <p className="text-center text-sm text-gray-500">
-              Demo: use qualquer email/senha para entrar
+              Use as credenciais cadastradas para acessar a plataforma.
             </p>
           </div>
         </div>

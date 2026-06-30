@@ -1,12 +1,13 @@
 import { User } from '../../types'
-import { User as UserIcon, Edit, Trash2, Shield, UserCog, Wrench } from 'lucide-react'
+import { User as UserIcon, Trash2, Shield, UserCog, Eye } from 'lucide-react'
 
 interface UserManagementProps {
   users: User[]
   onDelete: (userId: string) => void
+  currentUserId?: string
 }
 
-export function UserManagement({ users, onDelete }: UserManagementProps) {
+export function UserManagement({ users, onDelete, currentUserId }: UserManagementProps) {
   const getRoleIcon = (role: User['role']) => {
     switch (role) {
       case 'admin':
@@ -14,7 +15,7 @@ export function UserManagement({ users, onDelete }: UserManagementProps) {
       case 'manager':
         return <UserCog className="h-4 w-4 text-primary" />
       default:
-        return <Wrench className="h-4 w-4 text-warning" />
+        return <Eye className="h-4 w-4 text-warning" />
     }
   }
 
@@ -25,7 +26,7 @@ export function UserManagement({ users, onDelete }: UserManagementProps) {
       case 'manager':
         return 'Gerente'
       default:
-        return 'Tecnico'
+        return 'Usuario Comum'
     }
   }
 
@@ -51,6 +52,7 @@ export function UserManagement({ users, onDelete }: UserManagementProps) {
               <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Usuario</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Email</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Funcao</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Clientes</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Criado em</th>
               <th className="text-right py-3 px-4 text-sm font-medium text-gray-600">Acoes</th>
             </tr>
@@ -63,7 +65,12 @@ export function UserManagement({ users, onDelete }: UserManagementProps) {
                     <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center">
                       <UserIcon className="h-5 w-5" />
                     </div>
-                    <span className="font-medium text-gray-900">{user.name}</span>
+                    <div>
+                      <span className="font-medium text-gray-900">{user.name}</span>
+                      {user.id === currentUserId && (
+                        <p className="text-xs text-primary">Usuario atual</p>
+                      )}
+                    </div>
                   </div>
                 </td>
                 <td className="py-4 px-4 text-gray-600">{user.email}</td>
@@ -73,14 +80,15 @@ export function UserManagement({ users, onDelete }: UserManagementProps) {
                     {getRoleText(user.role)}
                   </span>
                 </td>
+                <td className="py-4 px-4 text-gray-600">
+                  {user.clientAccess.includes('*') ? 'Todos os clientes' : user.clientAccess.join(', ')}
+                </td>
                 <td className="py-4 px-4 text-gray-600">{user.createdAt}</td>
                 <td className="py-4 px-4 text-right">
                   <div className="flex items-center justify-end gap-2">
-                    <button className="p-2 text-gray-500 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors">
-                      <Edit className="h-4 w-4" />
-                    </button>
                     <button
                       onClick={() => onDelete(user.id)}
+                      disabled={user.id === currentUserId}
                       className="p-2 text-gray-500 hover:text-danger hover:bg-danger/10 rounded-lg transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />

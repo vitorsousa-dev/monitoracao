@@ -1,24 +1,25 @@
-import { useState } from 'react'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { UserManagement } from '../components/users/UserManagement'
 import { UserForm } from '../components/users/UserForm'
-import { mockUsers } from '../lib/mockData'
+import { useAuth } from '../hooks/useAuth'
 import { User } from '../types'
 
 export function Users() {
-  const [users, setUsers] = useState<User[]>(mockUsers)
+  const { user, users, createUser, deleteUser } = useAuth()
 
   const handleAddUser = (userData: Omit<User, 'id' | 'createdAt'>) => {
-    const newUser: User = {
-      ...userData,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString().split('T')[0]
+    const result = createUser(userData)
+    if (!result.success) {
+      window.alert(result.message)
+      return
     }
-    setUsers([newUser, ...users])
+
+    window.alert(result.message)
   }
 
   const handleDeleteUser = (userId: string) => {
-    setUsers(users.filter(u => u.id !== userId))
+    const result = deleteUser(userId)
+    window.alert(result.message)
   }
 
   return (
@@ -31,7 +32,7 @@ export function Users() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
-            <UserManagement users={users} onDelete={handleDeleteUser} />
+            <UserManagement users={users} onDelete={handleDeleteUser} currentUserId={user?.id} />
           </div>
           <div className="lg:col-span-1">
             <UserForm onAdd={handleAddUser} />
