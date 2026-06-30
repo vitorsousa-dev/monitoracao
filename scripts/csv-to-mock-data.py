@@ -289,35 +289,63 @@ def csv_to_mock_data():
                 'followupCount': followup_count if is_latest_alarm else max(followup_count - 1, 0),
             })
 
-        task_types = ['maintenance', 'inspection', 'replacement']
-        task_titles = [
-            'Ajuste de insuflamento',
-            'Inspecao preventiva',
-            'Avaliar substituicao de componente',
-        ]
-        task_descriptions = [
-            'Indicadores operacionais sugerem manutencao preventiva prioritaria.',
-            'Variacao de conforto e performance sugere validacao em campo.',
-            'Recorrencia de ocorrencias indica revisar componente critico do equipamento.',
-        ]
-        task_priorities = ['high', 'medium', 'high']
-        task_statuses = ['pending', 'in_progress', 'pending']
-        due_dates = ['2026-07-05', '2026-07-09', '2026-07-12']
+        predictive_analysis_map = {
+            'R24.14-REUNIÃO 14': {
+                'id': '1',
+                'type': 'inspection',
+                'title': 'Analise Tecnica - R24.14 Reuniao 14',
+                'description': 'Analise preditiva concentrada na recorrencia de alarmes P0 e na incapacidade de atingir o setpoint.',
+                'technicalAnalysis': 'A unidade apresenta forte indicio de anomalia no controle da expansao do refrigerante, com suspeita prioritaria de falha mecanica ou vazamento interno da valvula de expansao eletronica (EEV).',
+                'detailedAnalysis': [
+                    'Durante o periodo analisado a unidade permaneceu em operacao com recorrencia de alarmes de incapacidade de atingir o setpoint.',
+                    'Os sensores do evaporador apresentaram queda progressiva de temperatura ate aproximadamente -12°C, enquanto a EEV operou frequentemente proxima da abertura maxima, em torno de 304 pls.',
+                    'Mesmo apos alteracao da velocidade do ventilador para FAN HIGH, os sensores continuaram reduzindo para temperaturas negativas, o que reduz a probabilidade de falha primaria por ventilacao insuficiente.',
+                    'Os indicios apontam para anomalia no controle da expansao do refrigerante, com forte suspeita de falha mecanica ou vazamento interno da EEV, hipotese que deve ser priorizada na inspecao corretiva.',
+                    'Como a unidade pertence ao mesmo sistema da Reuniao 13 e apresenta comportamento semelhante, recomenda-se complementar a investigacao com a avaliacao da estrategia de controle da condensadora e do circuito frigorifico.'
+                ],
+                'priority': 'high',
+                'status': 'in_progress',
+                'dueDate': '2026-07-05',
+                'estimatedCost': 4800,
+            },
+            'R24.13-REUNIÃO 13': {
+                'id': '2',
+                'type': 'inspection',
+                'title': 'Analise Tecnica - R24.13 Reuniao 13',
+                'description': 'Analise preditiva focada na repetibilidade da anomalia operacional e na abertura elevada da EEV ao longo do ciclo.',
+                'technicalAnalysis': 'A unidade apresenta comportamento operacional semelhante ao da Reuniao 14, reforcando a suspeita de anomalia no circuito de expansao e a necessidade de validar tambem a influencia sistemica do conjunto condensador.',
+                'detailedAnalysis': [
+                    'Foi identificado comportamento operacional semelhante ao da unidade R24.14, com alerta recorrente de nao atendimento ao setpoint e operacao continua em modo COOL.',
+                    'Durante a analise, a temperatura ambiente permaneceu proxima de 19°C a 20°C, enquanto os sensores do evaporador reduziram ate aproximadamente -6°C durante a operacao.',
+                    'A EEV operou entre aproximadamente 200 e 304 pls, mantendo elevada abertura durante boa parte do ciclo, sem variacoes significativas na corrente do compressor que justificassem o comportamento observado.',
+                    'Em 26/06/2026 foi novamente registrado o mesmo alerta operacional, mantendo-se a EEV em 304 pls e o ambiente sem atingir a condicao de controle esperada.',
+                    'A repetibilidade da anomalia ao longo dos dias descarta ocorrencia pontual e reforca a recomendacao de inspecao da EEV, dos comandos eletricos associados e da estrategia de controle da unidade condensadora.'
+                ],
+                'priority': 'high',
+                'status': 'pending',
+                'dueDate': '2026-07-05',
+                'estimatedCost': 4800,
+            },
+        }
 
         mock_predictive_tasks = []
-        for idx, equipment in enumerate(top_problematic[:3], start=1):
+        for equipment_name in ['R24.14-REUNIÃO 14', 'R24.13-REUNIÃO 13']:
+            equipment = equipment_by_name.get(equipment_name)
+            analysis = predictive_analysis_map[equipment_name]
             mock_predictive_tasks.append({
-                'id': str(idx),
+                'id': analysis['id'],
                 'equipmentId': equipment['id'],
                 'equipmentName': equipment['name'],
-                'type': task_types[idx - 1],
-                'title': task_titles[idx - 1],
-                'description': task_descriptions[idx - 1],
-                'priority': task_priorities[idx - 1],
-                'dueDate': due_dates[idx - 1],
-                'status': task_statuses[idx - 1],
+                'type': analysis['type'],
+                'title': analysis['title'],
+                'description': analysis['description'],
+                'technicalAnalysis': analysis['technicalAnalysis'],
+                'detailedAnalysis': analysis['detailedAnalysis'],
+                'priority': analysis['priority'],
+                'dueDate': analysis['dueDate'],
+                'status': analysis['status'],
                 'riskScore': int(clamp(round(100 - equipment['health'] + equipment['totalOccurrences'] * 6), 20, 95)),
-                'estimatedCost': int(800 + equipment['criticalOccurrences'] * 2500 + equipment['moderateOccurrences'] * 700),
+                'estimatedCost': analysis['estimatedCost'],
             })
 
         ranking_seed = []

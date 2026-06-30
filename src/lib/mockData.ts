@@ -1505,40 +1505,43 @@ export const mockPredictiveTasks: PredictiveTask[] = [
     "id": "1",
     "equipmentId": "34",
     "equipmentName": "R24.14-REUNIÃO 14",
-    "type": "maintenance",
-    "title": "Ajuste de insuflamento",
-    "description": "Indicadores operacionais sugerem manutencao preventiva prioritaria.",
+    "type": "inspection",
+    "title": "Analise Tecnica - R24.14 Reuniao 14",
+    "description": "Analise preditiva concentrada na recorrencia de alarmes P0 e na incapacidade de atingir o setpoint.",
+    "technicalAnalysis": "A unidade apresenta forte indicio de anomalia no controle da expansao do refrigerante, com suspeita prioritaria de falha mecanica ou vazamento interno da valvula de expansao eletronica (EEV).",
+    "detailedAnalysis": [
+      "Durante o periodo analisado a unidade permaneceu em operacao com recorrencia de alarmes de incapacidade de atingir o setpoint.",
+      "Os sensores do evaporador apresentaram queda progressiva de temperatura ate aproximadamente -12°C, enquanto a EEV operou frequentemente proxima da abertura maxima, em torno de 304 pls.",
+      "Mesmo apos alteracao da velocidade do ventilador para FAN HIGH, os sensores continuaram reduzindo para temperaturas negativas, o que reduz a probabilidade de falha primaria por ventilacao insuficiente.",
+      "Os indicios apontam para anomalia no controle da expansao do refrigerante, com forte suspeita de falha mecanica ou vazamento interno da EEV, hipotese que deve ser priorizada na inspecao corretiva.",
+      "Como a unidade pertence ao mesmo sistema da Reuniao 13 e apresenta comportamento semelhante, recomenda-se complementar a investigacao com a avaliacao da estrategia de controle da condensadora e do circuito frigorifico."
+    ],
     "priority": "high",
     "dueDate": "2026-07-05",
-    "status": "pending",
+    "status": "in_progress",
     "riskScore": 95,
-    "estimatedCost": 75800
+    "estimatedCost": 4800
   },
   {
     "id": "2",
     "equipmentId": "33",
     "equipmentName": "R24.13-REUNIÃO 13",
     "type": "inspection",
-    "title": "Inspecao preventiva",
-    "description": "Variacao de conforto e performance sugere validacao em campo.",
-    "priority": "medium",
-    "dueDate": "2026-07-09",
-    "status": "in_progress",
-    "riskScore": 95,
-    "estimatedCost": 38300
-  },
-  {
-    "id": "3",
-    "equipmentId": "19",
-    "equipmentName": "R24.12-AUSTRÁLIA",
-    "type": "replacement",
-    "title": "Avaliar substituicao de componente",
-    "description": "Recorrencia de ocorrencias indica revisar componente critico do equipamento.",
+    "title": "Analise Tecnica - R24.13 Reuniao 13",
+    "description": "Analise preditiva focada na repetibilidade da anomalia operacional e na abertura elevada da EEV ao longo do ciclo.",
+    "technicalAnalysis": "A unidade apresenta comportamento operacional semelhante ao da Reuniao 14, reforcando a suspeita de anomalia no circuito de expansao e a necessidade de validar tambem a influencia sistemica do conjunto condensador.",
+    "detailedAnalysis": [
+      "Foi identificado comportamento operacional semelhante ao da unidade R24.14, com alerta recorrente de nao atendimento ao setpoint e operacao continua em modo COOL.",
+      "Durante a analise, a temperatura ambiente permaneceu proxima de 19°C a 20°C, enquanto os sensores do evaporador reduziram ate aproximadamente -6°C durante a operacao.",
+      "A EEV operou entre aproximadamente 200 e 304 pls, mantendo elevada abertura durante boa parte do ciclo, sem variacoes significativas na corrente do compressor que justificassem o comportamento observado.",
+      "Em 26/06/2026 foi novamente registrado o mesmo alerta operacional, mantendo-se a EEV em 304 pls e o ambiente sem atingir a condicao de controle esperada.",
+      "A repetibilidade da anomalia ao longo dos dias descarta ocorrencia pontual e reforca a recomendacao de inspecao da EEV, dos comandos eletricos associados e da estrategia de controle da unidade condensadora."
+    ],
     "priority": "high",
-    "dueDate": "2026-07-12",
+    "dueDate": "2026-07-05",
     "status": "pending",
-    "riskScore": 20,
-    "estimatedCost": 3300
+    "riskScore": 95,
+    "estimatedCost": 4800
   }
 ];
 

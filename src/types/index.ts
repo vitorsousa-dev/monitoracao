@@ -69,6 +69,8 @@ export interface PredictiveTask {
   type: 'maintenance' | 'inspection' | 'replacement'
   title: string
   description: string
+  technicalAnalysis: string
+  detailedAnalysis: string[]
   priority: 'high' | 'medium' | 'low'
   dueDate: string
   status: 'pending' | 'in_progress' | 'completed'
