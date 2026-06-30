@@ -117,6 +117,37 @@ def build_alarm_priority(alarm_code):
     return 3
 
 
+def month_label_from_key(month_key):
+    year, month = month_key.split('-')
+    month_names = {
+        '01': 'Jan',
+        '02': 'Fev',
+        '03': 'Mar',
+        '04': 'Abr',
+        '05': 'Mai',
+        '06': 'Jun',
+        '07': 'Jul',
+        '08': 'Ago',
+        '09': 'Set',
+        '10': 'Out',
+        '11': 'Nov',
+        '12': 'Dez',
+    }
+    return f"{month_names[month]}/{year[-2:]}"
+
+
+def availability_penalty(total):
+    return min(18, total * 0.35)
+
+
+def comfort_penalty(total):
+    return min(22, total * 0.45)
+
+
+def performance_penalty(total):
+    return min(16, total * 0.30)
+
+
 def csv_to_mock_data():
     """
     Converte os arquivos CSV para o arquivo mockData.ts usado na aplicacao React.
@@ -154,6 +185,7 @@ def csv_to_mock_data():
             latest_alarm_by_equipment.setdefault(equipment_name, alarm)
 
         mock_equipment = []
+        equipment_profiles = []
         for eq_key in sorted(latest_rows.keys()):
             fato_row = latest_rows[eq_key]
             eq_row = equipamentos_dim[eq_key]
@@ -167,6 +199,9 @@ def csv_to_mock_data():
             performance = round(float(fato_row['Performance']), 2)
             health = round(float(fato_row['Saude']), 2)
             mttr = round(float(fato_row['MTTR']), 2)
+            base_availability = round(clamp(availability + availability_penalty(alarm_total), 70, 99.5), 2)
+            base_comfort = round(clamp(comfort + comfort_penalty(alarm_total), 68, 98.0), 2)
+            base_performance = round(clamp(performance + performance_penalty(alarm_total), 70, 99.0), 2)
 
             equipamento = {
                 'id': str(eq_key),
@@ -187,6 +222,17 @@ def csv_to_mock_data():
                 'lastUpdated': format_date_key(fato_row['DataKey']),
             }
             mock_equipment.append(equipamento)
+            equipment_profiles.append({
+                'id': str(eq_key),
+                'name': equipment_name,
+                'type': str(eq_row['EquipamentoTipo']),
+                'area': str(area_row['AreaNome']),
+                'client': str(cliente_row['ClienteNome']),
+                'baseAvailability': base_availability,
+                'baseComfort': base_comfort,
+                'basePerformance': base_performance,
+                'lastUpdated': format_date_key(fato_row['DataKey']),
+            })
 
         mock_user = {
             'id': 'admin-1',
@@ -241,7 +287,7 @@ def csv_to_mock_data():
                 'id': '1',
                 'date': '2026-06-29',
                 'title': 'Importacao do Log de Alarmes',
-                'content': f'Foram incorporados {len(alarm_events)} registros reais de alarmes de maio e junho para o cliente {client_name}, com destaque para os equipamentos mais reincidentes.',
+                'content': f'Foram incorporados {len(alarm_events)} registros reais de alarmes disponiveis na base para o cliente {client_name}, com destaque para os equipamentos mais reincidentes.',
                 'author': 'Carlos Santos',
             },
             {
@@ -288,6 +334,73 @@ def csv_to_mock_data():
                 'hasFollowup': followup_count > 1,
                 'followupCount': followup_count if is_latest_alarm else max(followup_count - 1, 0),
             })
+
+        monthly_alarm_groups = {}
+        for alarm in alarm_events:
+            month_key = alarm['timestamp'].strftime('%Y-%m')
+            monthly_alarm_groups.setdefault(month_key, []).append(alarm)
+
+        mock_monthly_summaries = []
+        mock_monthly_equipment_snapshots = []
+        for month_key in sorted(monthly_alarm_groups.keys()):
+            month_alarms = monthly_alarm_groups[month_key]
+            start_date = min(alarm['timestamp'] for alarm in month_alarms).strftime('%Y-%m-%d')
+            end_date = max(alarm['timestamp'] for alarm in month_alarms).strftime('%Y-%m-%d')
+            counts_by_equipment = {}
+            for alarm in month_alarms:
+                counts_by_equipment[alarm['equipmentName']] = counts_by_equipment.get(alarm['equipmentName'], 0) + 1
+
+            month_snapshots = []
+            for profile in equipment_profiles:
+                monthly_occurrences = counts_by_equipment.get(profile['name'], 0)
+                monthly_availability = round(clamp(profile['baseAvailability'] - availability_penalty(monthly_occurrences), 70, 99.5), 2)
+                monthly_comfort = round(clamp(profile['baseComfort'] - comfort_penalty(monthly_occurrences), 68, 98.0), 2)
+                monthly_performance = round(clamp(profile['basePerformance'] - performance_penalty(monthly_occurrences), 70, 99.0), 2)
+                monthly_health = round((monthly_availability * 0.35) + (monthly_comfort * 0.25) + (95 * 0.20) + (monthly_performance * 0.20), 2)
+                monthly_mttr = round(min(24.0, 2.5 + (monthly_occurrences * 0.35)), 2) if monthly_occurrences > 0 else 0.0
+                snapshot = {
+                    'id': profile['id'],
+                    'name': profile['name'],
+                    'type': profile['type'],
+                    'area': profile['area'],
+                    'client': profile['client'],
+                    'health': monthly_health,
+                    'availability': monthly_availability,
+                    'comfort': monthly_comfort,
+                    'performance': monthly_performance,
+                    'status': build_status(monthly_health),
+                    'mttr': monthly_mttr,
+                    'totalOccurrences': monthly_occurrences,
+                    'criticalOccurrences': monthly_occurrences,
+                    'moderateOccurrences': 0,
+                    'informativeOccurrences': 0,
+                    'lastUpdated': end_date,
+                    'monthKey': month_key,
+                    'month': month_label_from_key(month_key),
+                    'startDate': start_date,
+                    'endDate': end_date,
+                }
+                month_snapshots.append(snapshot)
+
+            affected_snapshots = [snapshot for snapshot in month_snapshots if snapshot['totalOccurrences'] > 0]
+            affected_count = len(affected_snapshots)
+            if affected_count == 0:
+                affected_snapshots = month_snapshots
+                affected_count = len(month_snapshots)
+
+            mock_monthly_summaries.append({
+                'monthKey': month_key,
+                'month': month_label_from_key(month_key),
+                'startDate': start_date,
+                'endDate': end_date,
+                'health': round(sum(item['health'] for item in affected_snapshots) / affected_count, 2),
+                'target': 90,
+                'availability': round(sum(item['availability'] for item in affected_snapshots) / affected_count, 2),
+                'mttr': round(sum(item['mttr'] for item in affected_snapshots) / affected_count, 2),
+                'totalOccurrences': sum(item['totalOccurrences'] for item in affected_snapshots),
+                'affectedEquipment': affected_count,
+            })
+            mock_monthly_equipment_snapshots.extend(month_snapshots)
 
         predictive_analysis_map = {
             'R24.14-REUNIÃO 14': {
@@ -401,31 +514,27 @@ def csv_to_mock_data():
         ]
 
         mock_health_trend = [
-            {'month': 'Jan/26', 'health': 88, 'target': 90},
-            {'month': 'Fev/26', 'health': 89, 'target': 90},
-            {'month': 'Mar/26', 'health': 90, 'target': 90},
-            {'month': 'Abr/26', 'health': 89, 'target': 90},
-            {'month': 'Mai/26', 'health': 91, 'target': 90},
-            {'month': 'Jun/26', 'health': 90, 'target': 90},
+            {'month': item['month'], 'health': item['health'], 'target': item['target']}
+            for item in mock_monthly_summaries
         ]
 
         mock_uptime_data = [
-            {'month': 'Jan/26', 'availability': 93},
-            {'month': 'Fev/26', 'availability': 94},
-            {'month': 'Mar/26', 'availability': 95},
-            {'month': 'Abr/26', 'availability': 94},
-            {'month': 'Mai/26', 'availability': 95},
-            {'month': 'Jun/26', 'availability': 95},
+            {'month': item['month'], 'availability': item['availability']}
+            for item in mock_monthly_summaries
         ]
 
         sections = [
-            "import {\n  Equipment,\n  WeeklyUpdate,\n  HealthTrendData,\n  UptimeData,\n  User,\n  Alarm,\n  PredictiveTask,\n  SystemRanking,\n  EnergyData,\n  IEERData,\n  WaterData\n} from '../types';",
+            "import {\n  Equipment,\n  WeeklyUpdate,\n  HealthTrendData,\n  UptimeData,\n  User,\n  Alarm,\n  PredictiveTask,\n  SystemRanking,\n  EnergyData,\n  IEERData,\n  WaterData,\n  MonthlySummary,\n  EquipmentMonthlySnapshot\n} from '../types';",
             '',
             to_ts_export('mockUser', 'User', mock_user),
             '',
             to_ts_export('mockUsers', 'User[]', mock_users),
             '',
             to_ts_export('mockEquipment', 'Equipment[]', mock_equipment),
+            '',
+            to_ts_export('mockMonthlySummaries', 'MonthlySummary[]', mock_monthly_summaries),
+            '',
+            to_ts_export('mockMonthlyEquipmentSnapshots', 'EquipmentMonthlySnapshot[]', mock_monthly_equipment_snapshots),
             '',
             to_ts_export('mockWeeklyUpdates', 'WeeklyUpdate[]', mock_weekly_updates),
             '',

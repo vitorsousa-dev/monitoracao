@@ -36,6 +36,26 @@ export interface UptimeData {
   availability: number
 }
 
+export interface MonthlySummary {
+  monthKey: string
+  month: string
+  startDate: string
+  endDate: string
+  health: number
+  target: number
+  availability: number
+  mttr: number
+  totalOccurrences: number
+  affectedEquipment: number
+}
+
+export interface EquipmentMonthlySnapshot extends Equipment {
+  monthKey: string
+  month: string
+  startDate: string
+  endDate: string
+}
+
 export interface User {
   id: string
   name: string
