@@ -7,6 +7,23 @@ interface WaterChartProps {
 }
 
 export function WaterChart({ data }: WaterChartProps) {
+  if (data.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Droplets className="h-6 w-6 text-primary" />
+          <h3 className="text-lg font-semibold text-gray-900">Consumo de Agua</h3>
+        </div>
+        <div className="rounded-xl border border-dashed border-primary/30 bg-primary/5 p-6">
+          <p className="text-base font-medium text-gray-900">Aguardando integração com sensores</p>
+          <p className="mt-2 text-sm text-gray-600">
+            Os indicadores de consumo de água serão disponibilizados quando a leitura dos sensores estiver conectada à plataforma.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   const totalWater = data.reduce((sum, item) => sum + item.cubicMeters, 0)
   const totalCost = data.reduce((sum, item) => sum + item.cost, 0)
 

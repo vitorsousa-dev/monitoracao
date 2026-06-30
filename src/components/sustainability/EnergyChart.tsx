@@ -6,6 +6,22 @@ interface EnergyChartProps {
 }
 
 export function EnergyChart({ data }: EnergyChartProps) {
+  if (data.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Consumo Elétrico</h3>
+        </div>
+        <div className="rounded-xl border border-dashed border-primary/30 bg-primary/5 p-6">
+          <p className="text-base font-medium text-gray-900">Aguardando conexão com multimedidor</p>
+          <p className="mt-2 text-sm text-gray-600">
+            Os dados de consumo elétrico serão exibidos automaticamente assim que a integração com o multimedidor estiver disponível.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   const totalKwh = data.reduce((sum, item) => sum + item.kwhConsumed, 0)
   const totalCost = data.reduce((sum, item) => sum + item.kwhCost, 0)
   const avgKwh = Math.round(totalKwh / data.length)

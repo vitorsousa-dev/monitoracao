@@ -6,6 +6,23 @@ interface IEERCalculatorProps {
 }
 
 export function IEERCalculator({ data }: IEERCalculatorProps) {
+  if (data.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Indice IEER</h3>
+        <div className="rounded-xl border border-dashed border-primary/30 bg-primary/5 p-6 text-center">
+          <div className="flex items-center justify-center mb-3">
+            <Gauge className="h-8 w-8 text-primary" />
+          </div>
+          <p className="text-xl font-semibold text-gray-900">Em breve</p>
+          <p className="mt-2 text-sm text-gray-600">
+            O indice IEER será habilitado assim que a base técnica de eficiência estiver conectada e validada.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   const avgIEER = data.reduce((sum, item) => sum + item.ieer, 0) / data.length
   const avgEfficiency = data.reduce((sum, item) => sum + item.efficiency, 0) / data.length
 

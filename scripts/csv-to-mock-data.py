@@ -482,36 +482,11 @@ def csv_to_mock_data():
             item['trend'] = 'down' if idx == 1 else 'stable' if idx == 2 else 'up'
             mock_system_rankings.append(item)
 
-        top_three = mock_equipment[:3] if len(mock_equipment) >= 3 else mock_equipment
         mock_ieer_data = []
-        for equipment in top_three:
-            efficiency = round(clamp(equipment['performance'] * 1.02, 75, 115), 1)
-            mock_ieer_data.append({
-                'equipmentId': equipment['id'],
-                'equipmentName': equipment['name'],
-                'ieer': round(clamp(equipment['performance'] / 5.2, 12, 22), 1),
-                'target': 18.0,
-                'efficiency': efficiency,
-                'lastUpdated': '2026-06-29',
-            })
 
-        mock_energy_data = [
-            {'month': 'Jan/26', 'kwhConsumed': 12840, 'kwhCost': 1669.2, 'target': 13000, 'previousYear': 13950},
-            {'month': 'Fev/26', 'kwhConsumed': 12410, 'kwhCost': 1613.3, 'target': 12800, 'previousYear': 13620},
-            {'month': 'Mar/26', 'kwhConsumed': 13190, 'kwhCost': 1714.7, 'target': 12900, 'previousYear': 14110},
-            {'month': 'Abr/26', 'kwhConsumed': 13640, 'kwhCost': 1773.2, 'target': 13200, 'previousYear': 14580},
-            {'month': 'Mai/26', 'kwhConsumed': 12980, 'kwhCost': 1687.4, 'target': 13000, 'previousYear': 14040},
-            {'month': 'Jun/26', 'kwhConsumed': 12620, 'kwhCost': 1640.6, 'target': 12900, 'previousYear': 13710},
-        ]
+        mock_energy_data = []
 
-        mock_water_data = [
-            {'month': 'Jan/26', 'cubicMeters': 91, 'cost': 163.8, 'target': 95, 'previousYear': 102},
-            {'month': 'Fev/26', 'cubicMeters': 88, 'cost': 158.4, 'target': 94, 'previousYear': 99},
-            {'month': 'Mar/26', 'cubicMeters': 96, 'cost': 172.8, 'target': 95, 'previousYear': 105},
-            {'month': 'Abr/26', 'cubicMeters': 93, 'cost': 167.4, 'target': 94, 'previousYear': 101},
-            {'month': 'Mai/26', 'cubicMeters': 89, 'cost': 160.2, 'target': 92, 'previousYear': 97},
-            {'month': 'Jun/26', 'cubicMeters': 87, 'cost': 156.6, 'target': 92, 'previousYear': 95},
-        ]
+        mock_water_data = []
 
         mock_health_trend = [
             {'month': item['month'], 'health': item['health'], 'target': item['target']}
