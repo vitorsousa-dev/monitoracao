@@ -79,7 +79,41 @@ ALARM_LOGS_RAW = """
 12/05/26 12:00 | R24.14-REUNIÃO 14 (011) | Serasa Experian - PDC | Midea_7 | P0 | High
 11/05/26 18:35 | R24.14-REUNIÃO 14 (011) | Serasa Experian - PDC | Midea_7 | P0 | High
 11/05/26 18:10 | R24.14-REUNIÃO 14 (011) | Serasa Experian - PDC | Midea_7 | P0 | High
+23/06/26 16:10 | 23/06/26 17:15 | R24.13-REUNIÃO 13 (010) | Midea_7 | 4# | High
+23/06/26 14:35 | 23/06/26 14:45 | R24.13-REUNIÃO 13 (010) | Midea_7 | P0 | High
+23/06/26 14:05 | 23/06/26 14:20 | R24.13-REUNIÃO 13 (010) | Midea_7 | P0 | High
+22/06/26 20:00 | 22/06/26 20:15 | R24.14-REUNIÃO 14 (011) | Midea_7 | P0 | High
+17/06/26 17:15 | 17/06/26 17:30 | R24.13-REUNIÃO 13 (010) | Midea_7 | P0 | High
+15/06/26 21:50 | 15/06/26 22:00 | R24.10-BLUMENAU (042) | Midea_4 | P0 | High
+11/6/2026 12:45 | 11/6/2026 13:00 | R24.13-REUNIÃO 13 (010) | Midea_7 | P0 | High
+11/6/2026 12:05 | 11/6/2026 12:20 | R24.13-REUNIÃO 13 (010) | Midea_7 | P0 | High
+11/6/2026 11:30 | 11/6/2026 11:50 | R24.13-REUNIÃO 13 (010) | Midea_7 | P0 | High
+11/6/2026 10:55 | 11/6/2026 11:10 | R24.13-REUNIÃO 13 (010) | Midea_7 | P0 | High
+10/6/2026 17:45 | 10/6/2026 18:00 | R24.13-REUNIÃO 13 (010) | Midea_7 | P0 | High
+10/6/2026 17:45 | 10/6/2026 18:00 | R24.14-REUNIÃO 14 (011) | Midea_7 | P0 | High
+10/6/2026 16:40 | 10/6/2026 16:55 | R24.13-REUNIÃO 13 (010) | Midea_7 | P0 | High
+10/6/2026 16:40 | 10/6/2026 16:50 | R24.14-REUNIÃO 14 (011) | Midea_7 | P0 | High
+3/6/2026 16:20 | 3/6/2026 16:35 | R24.14-REUNIÃO 14 (011) | Midea_7 | P0 | High
+3/6/2026 15:45 | 3/6/2026 16:00 | R24.14-REUNIÃO 14 (011) | Midea_7 | P0 | High
+3/6/2026 15:20 | 3/6/2026 15:30 | R24.14-REUNIÃO 14 (011) | Midea_7 | P0 | High
+3/6/2026 14:45 | 3/6/2026 14:55 | R24.14-REUNIÃO 14 (011) | Midea_7 | P0 | High
+3/6/2026 14:20 | 3/6/2026 14:30 | R24.14-REUNIÃO 14 (011) | Midea_7 | P0 | High
+2/6/2026 13:10 | 2/6/2026 13:25 | R24.13-REUNIÃO 13 (010) | Midea_7 | P0 | High
+2/6/2026 12:30 | 2/6/2026 12:45 | R24.13-REUNIÃO 13 (010) | Midea_7 | P0 | High
+2/6/2026 12:00 | 2/6/2026 12:15 | R24.13-REUNIÃO 13 (010) | Midea_7 | P0 | High
+2/6/2026 11:30 | 2/6/2026 11:40 | R24.13-REUNIÃO 13 (010) | Midea_7 | P0 | High
+2/6/2026 11:05 | 2/6/2026 11:15 | R24.13-REUNIÃO 13 (010) | Midea_7 | P0 | High
 """.strip()
+
+
+def parse_datetime_flexible(value):
+    value = value.strip()
+    for fmt in ('%d/%m/%y %H:%M', '%d/%m/%Y %H:%M'):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    raise ValueError(f'Data invalida: {value}')
 
 
 def parse_alarm_logs(raw_text):
@@ -89,15 +123,25 @@ def parse_alarm_logs(raw_text):
         if len(parts) != 6:
             continue
 
-        timestamp_raw, equipment_raw, client_raw, system_raw, alarm_code, severity = parts
-        alarm_dt = datetime.strptime(timestamp_raw, '%d/%m/%y %H:%M')
-        equipment_name = equipment_raw.rsplit('(', 1)[0].strip()
-        client_name = client_raw.split(' - ')[0].strip()
-        system_name = system_raw.strip().lower()
+        first_col, second_col, third_col, fourth_col, alarm_code, severity = parts
+
+        if any(char.isdigit() for char in second_col[:2]) and '/' in second_col and ':' in second_col:
+            alarm_dt = parse_datetime_flexible(first_col)
+            close_dt = parse_datetime_flexible(second_col)
+            equipment_name = third_col.rsplit('(', 1)[0].strip()
+            client_name = 'Serasa Experian'
+            system_name = fourth_col.strip().lower()
+        else:
+            alarm_dt = parse_datetime_flexible(first_col)
+            close_dt = alarm_dt
+            equipment_name = second_col.rsplit('(', 1)[0].strip()
+            client_name = third_col.split(' - ')[0].strip()
+            system_name = fourth_col.strip().lower()
 
         alarm_events.append({
             'timestamp': alarm_dt,
-            'timestampRaw': timestamp_raw,
+            'closeTimestamp': close_dt,
+            'timestampRaw': first_col,
             'equipmentName': equipment_name,
             'clientName': client_name,
             'systemName': system_name,
@@ -328,7 +372,7 @@ def csv_to_mock_data():
                 'status': status,
                 'priority': build_alarm_priority(alarm['alarmCode']),
                 'createdAt': alarm['timestamp'].strftime('%Y-%m-%d %H:%M'),
-                'updatedAt': latest_alarm['timestamp'].strftime('%Y-%m-%d %H:%M'),
+                'updatedAt': alarm['closeTimestamp'].strftime('%Y-%m-%d %H:%M'),
                 'clientName': alarm['clientName'],
                 'areaName': alarm['systemName'],
                 'hasFollowup': followup_count > 1,
