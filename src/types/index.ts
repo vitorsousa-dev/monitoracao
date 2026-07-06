@@ -22,6 +22,16 @@ export interface EquipmentJustification {
   details: string[]
 }
 
+export interface FinancialHealthMetrics {
+  score: number
+  correctiveExposure: number
+  predictiveInvestment: number
+  avoidedTechnicalVisits: number
+  avoidedWaste: number
+  netEstimatedCost: number
+  savingsRate: number
+}
+
 export interface WeeklyUpdate {
   id: string
   date: string
@@ -52,6 +62,28 @@ export interface MonthlySummary {
   mttr: number
   totalOccurrences: number
   affectedEquipment: number
+}
+
+export interface SiteLocation {
+  siteId: string
+  nome: string
+  cliente: string
+  endereco: string
+  cidade: string
+  estado: string
+  latitude: number | null
+  longitude: number | null
+  saudeGeral: number
+  disponibilidade: number
+  conforto: number
+  performance: number
+  ocorrenciasCriticas: number
+  ultimaAtualizacao: string
+}
+
+export interface SiteMonthlySnapshot extends SiteLocation {
+  monthKey: string
+  month: string
 }
 
 export interface EquipmentMonthlySnapshot extends Equipment {

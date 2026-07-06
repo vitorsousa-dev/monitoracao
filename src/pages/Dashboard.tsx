@@ -6,17 +6,20 @@ import { UptimeChart } from '@/components/charts/UptimeChart'
 import { EquipmentCard } from '@/components/equipment/EquipmentCard'
 import { WeeklyUpdateCard } from '@/components/updates/WeeklyUpdateCard'
 import { RankingView } from '@/components/dashboard/RankingView'
+import { SiteMap } from '@/components/dashboard/SiteMap'
 import { RecurringAlarms } from '@/components/alarms/RecurringAlarms'
+import { useScope } from '@/hooks/useScope'
 import {
   mockEquipment,
   mockMonthlySummaries,
   mockMonthlyEquipmentSnapshots,
+  mockSites,
   mockWeeklyUpdates,
   mockAlarms,
   mockPredictiveTasks
 } from '@/lib/mockData'
-import { Equipment, EquipmentJustification, SystemRanking } from '@/types'
-import { buildEquipmentJustification, getHealthStatusText } from '@/lib/utils'
+import { Equipment, EquipmentJustification, SiteLocation, SystemRanking } from '@/types'
+import { buildEquipmentJustification, buildFinancialHealthMetrics, getHealthStatusColor, getHealthStatusText } from '@/lib/utils'
 import { TrendingUp, TrendingDown, Activity, AlertTriangle, Minus, Printer } from 'lucide-react'
 
 type PdfColor = [number, number, number]
@@ -241,9 +244,12 @@ function getStatusPalette(status: Equipment['status']) {
 }
 
 export function Dashboard() {
+  const { selectedClient, selectedSite } = useScope()
   const availableMonths = mockMonthlySummaries
   const [startMonth, setStartMonth] = useState(availableMonths[0]?.monthKey ?? '')
   const [endMonth, setEndMonth] = useState(availableMonths[availableMonths.length - 1]?.monthKey ?? '')
+  const [showMttrDetails, setShowMttrDetails] = useState(false)
+  const [showFinancialDetails, setShowFinancialDetails] = useState(false)
 
   const selectedSummaries = useMemo(() => {
     if (!startMonth || !endMonth) {
@@ -360,6 +366,66 @@ export function Dashboard() {
     return mockAlarms.filter((alarm) => monthKeys.has(alarm.createdAt.slice(0, 7)))
   }, [selectedSummaries])
 
+  const filteredPredictiveTasks = useMemo(() => {
+    const relevantEquipmentIds = new Set([
+      ...aggregatedEquipment.map((equipment) => equipment.id),
+      ...filteredAlarms.map((alarm) => alarm.equipmentId),
+    ])
+
+    if (relevantEquipmentIds.size === 0) {
+      return mockPredictiveTasks
+    }
+
+    return mockPredictiveTasks.filter((task) => relevantEquipmentIds.has(task.equipmentId))
+  }, [aggregatedEquipment, filteredAlarms])
+
+  const siteSummaries = useMemo<SiteLocation[]>(() => {
+    if (mockSites.length === 0) {
+      return []
+    }
+
+    if (selectedSummaries.length === 0) {
+      return mockSites
+    }
+
+    const baseSite = mockSites[0]
+    const impactedSnapshots = selectedSnapshots.filter((snapshot) => snapshot.totalOccurrences > 0)
+    const snapshotSource = impactedSnapshots.length > 0 ? impactedSnapshots : selectedSnapshots
+    const snapshotCount = snapshotSource.length || 1
+    const criticalOccurrences = filteredAlarms.filter((alarm) => alarm.type === 'critical').length
+    const currentPeriodEndDate = selectedSummaries[selectedSummaries.length - 1]?.endDate ?? baseSite.ultimaAtualizacao
+
+    return [
+      {
+        ...baseSite,
+        saudeGeral: dashboardMetrics.averageHealth,
+        disponibilidade: dashboardMetrics.averageAvailability,
+        conforto: Number(
+          (
+            snapshotSource.reduce((sum, snapshot) => sum + snapshot.comfort, 0) /
+            snapshotCount
+          ).toFixed(2)
+        ),
+        performance: Number(
+          (
+            snapshotSource.reduce((sum, snapshot) => sum + snapshot.performance, 0) /
+            snapshotCount
+          ).toFixed(2)
+        ),
+        ocorrenciasCriticas: criticalOccurrences,
+        ultimaAtualizacao: currentPeriodEndDate,
+      },
+    ]
+  }, [dashboardMetrics.averageAvailability, dashboardMetrics.averageHealth, filteredAlarms, selectedSnapshots, selectedSummaries])
+
+  const visibleSiteSummaries = useMemo(() => {
+    return siteSummaries.filter((site) => {
+      const matchesClient = selectedClient === 'all-clients' || site.cliente === selectedClient
+      const matchesSite = selectedSite === 'all-sites' || site.siteId === selectedSite
+      return matchesClient && matchesSite
+    })
+  }, [selectedClient, selectedSite, siteSummaries])
+
   const highlightedEquipment = useMemo(
     () => (aggregatedEquipment.length > 0 ? aggregatedEquipment : mockEquipment.slice(0, 3)).slice(0, 3),
     [aggregatedEquipment]
@@ -368,11 +434,21 @@ export function Dashboard() {
   const equipmentJustifications = useMemo(() => {
     const entries: Array<[string, EquipmentJustification]> = highlightedEquipment.map((equipment) => [
       equipment.id,
-      buildEquipmentJustification(equipment, filteredAlarms, mockPredictiveTasks),
+      buildEquipmentJustification(equipment, filteredAlarms, filteredPredictiveTasks),
     ])
 
     return new Map<string, EquipmentJustification>(entries)
-  }, [filteredAlarms, highlightedEquipment])
+  }, [filteredAlarms, filteredPredictiveTasks, highlightedEquipment])
+
+  const financialMetrics = useMemo(
+    () => buildFinancialHealthMetrics(
+      filteredAlarms,
+      filteredPredictiveTasks,
+      dashboardMetrics.averageHealth,
+      dashboardMetrics.averageAvailability
+    ),
+    [dashboardMetrics.averageAvailability, dashboardMetrics.averageHealth, filteredAlarms, filteredPredictiveTasks]
+  )
 
   const currentSummary = selectedSummaries[selectedSummaries.length - 1]
   const currentSummaryIndex = currentSummary
@@ -409,6 +485,13 @@ export function Dashboard() {
       </div>
     )
   }
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      maximumFractionDigits: 0,
+    }).format(value)
 
   const handleExportOverviewPdf = () => {
     const followupAlarms = filteredAlarms
@@ -572,7 +655,7 @@ export function Dashboard() {
         { kind: 'rect', x: 316, y: 382, width: 252, height: 250, fillColor: [255, 255, 255], strokeColor: [226, 232, 240], lineWidth: 1 },
       ]
 
-      if (mockPredictiveTasks.length === 0) {
+      if (filteredPredictiveTasks.length === 0) {
         addWrappedText(pageThree, 'Sem analises preditivas registradas.', 58, 606, {
           size: 10,
           color: [71, 85, 105],
@@ -581,7 +664,7 @@ export function Dashboard() {
         })
       } else {
         let predictiveY = 606
-        mockPredictiveTasks.slice(0, 3).forEach((task) => {
+        filteredPredictiveTasks.slice(0, 3).forEach((task) => {
           const predictiveText = `${task.equipmentName}: ${task.technicalAnalysis}`
           const predictiveHeight = getWrappedTextHeight(predictiveText, { size: 10, maxLength: 34, lineGap: 3 })
 
@@ -690,42 +773,119 @@ export function Dashboard() {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
           <PerformanceGauge
             value={dashboardMetrics.averageHealth}
             title="Saúde Geral"
             subtitle="Equipamentos com ocorrências no período"
           />
           
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-semibold text-gray-900">Disponibilidade</h3>
+              <h3 className="text-xl font-semibold text-gray-900">Disponibilidade</h3>
               {renderTrend(availabilityDelta)}
             </div>
-            <p className="text-4xl font-bold text-primary mb-1">{dashboardMetrics.averageAvailability}%</p>
-            <p className="text-sm text-gray-500">Média dos equipamentos impactados</p>
+            <p className="mb-1 text-[2.2rem] font-bold leading-none text-primary">{dashboardMetrics.averageAvailability}%</p>
+            <p className="text-sm leading-6 text-gray-500">Média dos equipamentos impactados</p>
           </div>
           
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-semibold text-gray-900">MTTR</h3>
+              <h3 className="text-xl font-semibold text-gray-900">MTTR</h3>
               {renderTrend(mttrDelta, true)}
             </div>
-            <p className="text-4xl font-bold text-gray-900 mb-1">{dashboardMetrics.mttr}h</p>
-            <p className="text-sm text-gray-500">Tempo médio de resolução no período</p>
+            <p className="mb-1 text-[2.2rem] font-bold leading-none text-gray-900">{dashboardMetrics.mttr}h</p>
+            <p className="text-sm leading-6 text-gray-500">Tempo médio de resolução no período</p>
+            <button
+              type="button"
+              onClick={() => setShowMttrDetails((current) => !current)}
+              className="mt-3 inline-flex items-center rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+            >
+              {showMttrDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
+            </button>
+            {showMttrDetails && (
+              <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Detalhes do indicador</p>
+                <p className="mt-2 text-sm text-gray-700">
+                  O MTTR representa o tempo médio necessário para tratar e normalizar uma ocorrência, desde a abertura do alarme
+                  até a sua estabilização operacional.
+                </p>
+                <p className="mt-2 text-xs leading-5 text-gray-600">
+                  A medição considera o volume de eventos no período selecionado e o esforço médio estimado de resolução por
+                  equipamento impactado.
+                </p>
+              </div>
+            )}
           </div>
           
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-semibold text-gray-900">Ocorrências</h3>
+              <h3 className="text-xl font-semibold text-gray-900">Ocorrências</h3>
               <div className="flex items-center text-danger">
                 <AlertTriangle className="h-4 w-4 mr-1" />
               </div>
             </div>
-            <p className="text-4xl font-bold text-gray-900 mb-1">{dashboardMetrics.totalOccurrences}</p>
-            <p className="text-sm text-gray-500">{dashboardMetrics.affectedEquipment} equipamentos impactados</p>
+            <p className="mb-1 text-[2.2rem] font-bold leading-none text-gray-900">{dashboardMetrics.totalOccurrences}</p>
+            <p className="text-sm leading-6 text-gray-500">{dashboardMetrics.affectedEquipment} equipamentos impactados</p>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xl font-semibold text-gray-900">Saúde Financeira</h3>
+              <span
+                className="text-sm font-semibold"
+                style={{ color: getHealthStatusColor(financialMetrics.score) }}
+              >
+                {financialMetrics.savingsRate}%
+              </span>
+            </div>
+            <p
+              className="mb-1 text-[2.2rem] font-bold leading-none"
+              style={{ color: getHealthStatusColor(financialMetrics.score) }}
+            >
+              {financialMetrics.score}%
+            </p>
+            <p className="text-sm leading-6 text-gray-500">
+              Custo liquido estimado de {formatCurrency(financialMetrics.netEstimatedCost)} no período
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowFinancialDetails((current) => !current)}
+              className="mt-3 inline-flex items-center rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+            >
+              {showFinancialDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
+            </button>
+            {showFinancialDetails && (
+              <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Leitura financeira</p>
+                <div className="mt-3 space-y-2 text-sm text-gray-700">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Exposição corretiva estimada</span>
+                    <span className="font-semibold">{formatCurrency(financialMetrics.correctiveExposure)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Atividades preditivas planejadas</span>
+                    <span className="font-semibold">{formatCurrency(financialMetrics.predictiveInvestment)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Economia com visitas técnicas evitadas</span>
+                    <span className="font-semibold text-success">{formatCurrency(financialMetrics.avoidedTechnicalVisits)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Desperdício operacional evitado</span>
+                    <span className="font-semibold text-success">{formatCurrency(financialMetrics.avoidedWaste)}</span>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs leading-5 text-gray-600">
+                  A métrica considera valores de mercado para resposta a alarmes, custo estimado das ações preditivas e a
+                  economia gerada ao evitar visitas técnicas improdutivas ou manutenção sem ganho efetivo.
+                </p>
+              </div>
+            )}
           </div>
         </div>
+
+        <SiteMap sites={visibleSiteSummaries} periodLabel={selectedPeriodLabel} />
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <HealthTrendChart data={selectedSummaries.map(({ month, health, target }) => ({ month, health, target }))} />

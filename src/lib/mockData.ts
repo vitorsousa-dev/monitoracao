@@ -11,7 +11,9 @@ import {
   IEERData,
   WaterData,
   MonthlySummary,
-  EquipmentMonthlySnapshot
+  EquipmentMonthlySnapshot,
+  SiteLocation,
+  SiteMonthlySnapshot
 } from '../types';
 
 export const mockUser: User = {
@@ -809,6 +811,64 @@ export const mockMonthlySummaries: MonthlySummary[] = [
     "mttr": 5.3,
     "totalOccurrences": 24,
     "affectedEquipment": 3
+  }
+];
+
+export const mockSites: SiteLocation[] = [
+  {
+    "siteId": "serasa-pdc",
+    "nome": "Serasa Experian - PDC",
+    "cliente": "Serasa Experian",
+    "endereco": "Av. das Nações Unidas, 14401 - Torre Sucupira - 24º andar - Chácara Santo Antônio",
+    "cidade": "São Paulo",
+    "estado": "SP",
+    "latitude": -23.62158,
+    "longitude": -46.70275,
+    "saudeGeral": 86,
+    "disponibilidade": 88,
+    "conforto": 84,
+    "performance": 85,
+    "ocorrenciasCriticas": 3,
+    "ultimaAtualizacao": "30/06/2026"
+  }
+];
+
+export const mockSiteMonthlySnapshots: SiteMonthlySnapshot[] = [
+  {
+    "siteId": "serasa-pdc",
+    "nome": "Serasa Experian - PDC",
+    "cliente": "Serasa Experian",
+    "endereco": "Av. das Nações Unidas, 14401 - Torre Sucupira - 24º andar - Chácara Santo Antônio",
+    "cidade": "São Paulo",
+    "estado": "SP",
+    "latitude": -23.62158,
+    "longitude": -46.70275,
+    "saudeGeral": 82,
+    "disponibilidade": 84,
+    "conforto": 81,
+    "performance": 80,
+    "ocorrenciasCriticas": 3,
+    "ultimaAtualizacao": "28/05/2026",
+    "monthKey": "2026-05",
+    "month": "Mai/26"
+  },
+  {
+    "siteId": "serasa-pdc",
+    "nome": "Serasa Experian - PDC",
+    "cliente": "Serasa Experian",
+    "endereco": "Av. das Nações Unidas, 14401 - Torre Sucupira - 24º andar - Chácara Santo Antônio",
+    "cidade": "São Paulo",
+    "estado": "SP",
+    "latitude": -23.62158,
+    "longitude": -46.70275,
+    "saudeGeral": 86,
+    "disponibilidade": 88,
+    "conforto": 84,
+    "performance": 85,
+    "ocorrenciasCriticas": 3,
+    "ultimaAtualizacao": "30/06/2026",
+    "monthKey": "2026-06",
+    "month": "Jun/26"
   }
 ];
 

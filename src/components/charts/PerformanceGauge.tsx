@@ -13,13 +13,13 @@ export function PerformanceGauge({ value, title, subtitle }: PerformanceGaugePro
   ]
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
-      {subtitle && <p className="text-sm text-gray-500 mb-4">{subtitle}</p>}
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <h3 className="text-xl font-semibold text-gray-900">{title}</h3>
+      {subtitle && <p className="mt-2 text-sm leading-6 text-gray-500">{subtitle}</p>}
       
-      <div className="relative">
-        <ResponsiveContainer width="100%" height={200}>
-          <RadialBarChart cx="50%" cy="50%" innerRadius="70%" outerRadius="100%" barSize={10} data={data} startAngle={180} endAngle={0}>
+      <div className="relative mt-3 h-[138px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <RadialBarChart cx="50%" cy="68%" innerRadius="72%" outerRadius="100%" barSize={9} data={data} startAngle={180} endAngle={0}>
             <RadialBar
               background
               dataKey="value"
@@ -27,8 +27,8 @@ export function PerformanceGauge({ value, title, subtitle }: PerformanceGaugePro
             />
           </RadialBarChart>
         </ResponsiveContainer>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-4xl font-bold" style={{ color: getHealthStatusColor(value) }}>
+        <div className="absolute inset-x-0 bottom-1 flex items-end justify-center">
+          <span className="text-[2.2rem] font-bold leading-none" style={{ color: getHealthStatusColor(value) }}>
             {value}%
           </span>
         </div>

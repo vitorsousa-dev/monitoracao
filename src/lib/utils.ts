@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { Alarm, Equipment, EquipmentJustification, PredictiveTask } from "../types"
+import { Alarm, Equipment, EquipmentJustification, FinancialHealthMetrics, PredictiveTask } from "../types"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -93,5 +93,65 @@ export function buildEquipmentJustification(
       ? 'Status verde com estabilidade geral, mas com ponto de atencao monitorado.'
       : 'Status verde por estabilidade operacional e ausencia de evidencias criticas no periodo.',
     details: details.slice(0, 3),
+  }
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+export function buildFinancialHealthMetrics(
+  alarms: Alarm[],
+  predictiveTasks: PredictiveTask[],
+  averageHealth: number,
+  averageAvailability: number
+): FinancialHealthMetrics {
+  const marketReference = {
+    criticalAlarmCost: 350,
+    warningAlarmCost: 180,
+    infoAlarmCost: 80,
+    followupCost: 120,
+    technicalVisitSaving: 950,
+    lowValueMaintenanceSaving: 1650,
+  }
+
+  const criticalCount = alarms.filter((alarm) => alarm.type === 'critical').length
+  const warningCount = alarms.filter((alarm) => alarm.type === 'warning').length
+  const infoCount = alarms.filter((alarm) => alarm.type === 'info').length
+  const followupCount = alarms.filter((alarm) => alarm.status === 'pending_followup').length
+
+  const correctiveExposure =
+    criticalCount * marketReference.criticalAlarmCost +
+    warningCount * marketReference.warningAlarmCost +
+    infoCount * marketReference.infoAlarmCost +
+    followupCount * marketReference.followupCost
+
+  const predictiveInvestment = predictiveTasks.reduce((sum, task) => sum + task.estimatedCost, 0)
+  const avoidedTechnicalVisits = predictiveTasks.length * marketReference.technicalVisitSaving
+  const avoidedWaste = predictiveTasks.length * marketReference.lowValueMaintenanceSaving
+  const avoidedSavings = avoidedTechnicalVisits + avoidedWaste
+  const netEstimatedCost = Math.max(correctiveExposure + predictiveInvestment - avoidedSavings, 0)
+  const grossManagedValue = correctiveExposure + predictiveInvestment
+  const savingsRate = grossManagedValue > 0
+    ? clamp((avoidedSavings / grossManagedValue) * 100, 0, 100)
+    : 100
+
+  const score = clamp(
+    averageHealth * 0.25 +
+      averageAvailability * 0.15 +
+      savingsRate * 0.35 +
+      (100 - clamp(netEstimatedCost / 250, 0, 100)) * 0.25,
+    0,
+    100
+  )
+
+  return {
+    score: Number(score.toFixed(2)),
+    correctiveExposure: Number(correctiveExposure.toFixed(2)),
+    predictiveInvestment: Number(predictiveInvestment.toFixed(2)),
+    avoidedTechnicalVisits: Number(avoidedTechnicalVisits.toFixed(2)),
+    avoidedWaste: Number(avoidedWaste.toFixed(2)),
+    netEstimatedCost: Number(netEstimatedCost.toFixed(2)),
+    savingsRate: Number(savingsRate.toFixed(2)),
   }
 }

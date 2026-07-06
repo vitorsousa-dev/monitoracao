@@ -20,7 +20,7 @@ const navItems = [
   { path: '/sustainability', label: 'Sustentabilidade', icon: Droplets },
   { path: '/users', label: 'Usuários', icon: Users, adminOnly: true },
   { path: '/updates', label: 'Atualizações Semanais', icon: Calendar },
-  { path: '/settings', label: 'Configurações', icon: Settings, adminOnly: true },
+  { path: '/settings', label: 'Configurações', icon: Settings },
 ]
 
 export function Sidebar() {
