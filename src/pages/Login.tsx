@@ -68,11 +68,11 @@ export function Login() {
       <div className="flex min-h-screen items-center justify-center">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="flex flex-col items-center justify-center mb-4">
+          <div className="mb-4 flex items-center justify-center">
             <img
               src="/ems-logo.png"
-              alt="EMS"
-              className="h-[17.5rem] w-auto max-w-[520px] object-contain mx-auto"
+              alt="EMS e CoolAutomation"
+              className="h-auto w-full max-w-[390px] object-contain mx-auto sm:max-w-[460px]"
             />
           </div>
         </div>
