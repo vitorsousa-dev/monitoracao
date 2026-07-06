@@ -34,7 +34,7 @@ export function Sidebar() {
           <img
             src="/ems-logo.png"
             alt="EMS"
-            className="h-auto w-full max-w-[180px] object-contain"
+            className="h-auto w-full max-w-[300px] object-contain"
           />
         </div>
       </div>

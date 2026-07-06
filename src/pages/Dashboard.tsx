@@ -14,7 +14,6 @@ import {
   mockMonthlySummaries,
   mockMonthlyEquipmentSnapshots,
   mockSites,
-  mockWeeklyUpdates,
   mockAlarms,
   mockPredictiveTasks
 } from '@/lib/mockData'
@@ -919,9 +918,14 @@ export function Dashboard() {
                 <h2 className="text-xl font-semibold text-gray-900">Últimas Atualizações</h2>
               </div>
               <div className="space-y-4">
-                {mockWeeklyUpdates.slice(0, 3).map(update => (
-                  <WeeklyUpdateCard key={update.id} update={update} />
-                ))}
+                <div className="rounded-xl border border-dashed border-gray-300 bg-white p-6 text-center">
+                  <p className="text-sm font-medium text-gray-700">
+                    Nenhuma atualização semanal publicada até o momento.
+                  </p>
+                  <p className="mt-2 text-sm text-gray-500">
+                    As novas entradas poderão ser adicionadas manualmente na área de atualizações.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

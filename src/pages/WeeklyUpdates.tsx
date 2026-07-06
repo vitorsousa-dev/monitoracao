@@ -3,11 +3,10 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { WeeklyUpdateCard } from '@/components/updates/WeeklyUpdateCard'
 import { UpdateForm } from '@/components/updates/UpdateForm'
 import { useAuth } from '@/hooks/useAuth'
-import { mockWeeklyUpdates } from '@/lib/mockData'
 import { WeeklyUpdate } from '@/types'
 
 export function WeeklyUpdates() {
-  const [updates, setUpdates] = useState<WeeklyUpdate[]>(mockWeeklyUpdates)
+  const [updates, setUpdates] = useState<WeeklyUpdate[]>([])
   const { canEditPlatform } = useAuth()
 
   const handleAddUpdate = (title: string, content: string) => {
@@ -38,9 +37,20 @@ export function WeeklyUpdates() {
         )}
         
         <div className="space-y-4">
-          {updates.map(update => (
-            <WeeklyUpdateCard key={update.id} update={update} />
-          ))}
+          {updates.length > 0 ? (
+            updates.map(update => (
+              <WeeklyUpdateCard key={update.id} update={update} />
+            ))
+          ) : (
+            <div className="rounded-xl border border-dashed border-gray-300 bg-white p-6 text-center">
+              <p className="text-sm font-medium text-gray-700">
+                Nenhuma atualização semanal cadastrada no momento.
+              </p>
+              <p className="mt-2 text-sm text-gray-500">
+                Você poderá inserir novas atualizações manualmente por esta tela.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </DashboardLayout>
