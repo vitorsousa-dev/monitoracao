@@ -93,36 +93,19 @@ function loadUsersFromStorage() {
   }
 }
 
-function loadSessionUser(users: User[]) {
-  if (typeof window === 'undefined') {
-    return null
-  }
-
-  const sessionUserId = window.localStorage.getItem(SESSION_STORAGE_KEY)
-  if (!sessionUserId) {
-    return null
-  }
-
-  return users.find((storedUser) => storedUser.id === sessionUserId) ?? null
-}
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<User[]>(() => loadUsersFromStorage())
-  const [user, setUser] = useState<User | null>(() => loadSessionUser(loadUsersFromStorage()))
+  const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
     window.localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users))
   }, [users])
 
   useEffect(() => {
-    if (user) {
-      window.localStorage.setItem(SESSION_STORAGE_KEY, user.id)
-    } else {
-      window.localStorage.removeItem(SESSION_STORAGE_KEY)
-    }
-  }, [user])
+    window.localStorage.removeItem(SESSION_STORAGE_KEY)
+  }, [])
 
   useEffect(() => {
     if (!user) {
