@@ -29,17 +29,13 @@ export function Sidebar() {
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 min-h-screen flex flex-col">
-      <div className="p-6 border-b border-gray-200">
-        <div className="flex items-center gap-3">
+      <div className="border-b border-gray-200 p-6">
+        <div className="flex items-center justify-center">
           <img
             src="/ems-logo.png"
             alt="EMS"
-            className="h-8 w-auto object-contain"
+            className="h-auto w-full max-w-[180px] object-contain"
           />
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">EMS</h1>
-            <p className="text-xs text-gray-500">Relatório Gerencial</p>
-          </div>
         </div>
       </div>
       
