@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import { Alarm } from '../../types'
 import { Clock, AlertTriangle, PhoneCall } from 'lucide-react'
 
@@ -6,7 +7,12 @@ interface RecurringAlarmsProps {
 }
 
 export function RecurringAlarms({ alarms }: RecurringAlarmsProps) {
+  const [showAll, setShowAll] = useState(false)
   const pendingFollowup = alarms.filter(a => a.status === 'pending_followup')
+  const visibleAlarms = useMemo(
+    () => (showAll ? pendingFollowup : pendingFollowup.slice(0, 3)),
+    [pendingFollowup, showAll]
+  )
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -18,7 +24,7 @@ export function RecurringAlarms({ alarms }: RecurringAlarmsProps) {
       </div>
 
       <div className="space-y-3">
-        {pendingFollowup.map((alarm) => (
+        {visibleAlarms.map((alarm) => (
           <div key={alarm.id} className="p-4 border border-danger/20 bg-danger/5 rounded-lg">
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3">
@@ -51,6 +57,18 @@ export function RecurringAlarms({ alarms }: RecurringAlarmsProps) {
           </div>
         ))}
       </div>
+
+      {pendingFollowup.length > 3 && (
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setShowAll((current) => !current)}
+            className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            {showAll ? 'Ver menos' : `Ver mais ${pendingFollowup.length - 3} alarmes`}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

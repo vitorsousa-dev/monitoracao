@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowUp, ArrowDown, Minus } from 'lucide-react'
 import { SystemRanking } from '../../types'
@@ -7,11 +8,17 @@ interface RankingViewProps {
 }
 
 export function RankingView({ rankings }: RankingViewProps) {
+  const [showAll, setShowAll] = useState(false)
+  const visibleRankings = useMemo(
+    () => (showAll ? rankings : rankings.slice(0, 5)),
+    [rankings, showAll]
+  )
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Ranking de Equipamentos com Mais Alarmes</h3>
       <div className="space-y-3">
-        {rankings.map((system) => {
+        {visibleRankings.map((system) => {
           let trendIcon, trendColor
           switch (system.trend) {
             case 'up':
@@ -70,6 +77,17 @@ export function RankingView({ rankings }: RankingViewProps) {
           )
         })}
       </div>
+      {rankings.length > 5 && (
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setShowAll((current) => !current)}
+            className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            {showAll ? 'Ver menos' : `Ver mais ${rankings.length - 5} itens`}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
