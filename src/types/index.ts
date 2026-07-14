@@ -4,6 +4,7 @@ export interface Equipment {
   type: 'VRV' | 'Split' | 'Cassete' | 'Chiller'
   area: string
   client: string
+  siteId?: string
   health: number
   availability: number
   comfort: number
@@ -20,6 +21,16 @@ export interface Equipment {
 export interface EquipmentJustification {
   summary: string
   details: string[]
+}
+
+export interface SiteSystemCatalog {
+  id: string
+  client: string
+  siteId: string
+  systemName: string
+  outdoorUnits: string[]
+  internalUnits: string[]
+  status: 'active' | 'vacant'
 }
 
 export interface FinancialHealthMetrics {

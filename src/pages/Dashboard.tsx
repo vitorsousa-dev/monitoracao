@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { PerformanceGauge } from '@/components/charts/PerformanceGauge'
 import { HealthTrendChart } from '@/components/charts/HealthTrendChart'
@@ -10,14 +10,16 @@ import { RecurringAlarms } from '@/components/alarms/RecurringAlarms'
 import { useScope } from '@/hooks/useScope'
 import {
   mockEquipment,
-  mockMonthlySummaries,
   mockMonthlyEquipmentSnapshots,
   mockSites,
+  mockSiteMonthlySnapshots,
   mockAlarms,
   mockPredictiveTasks
 } from '@/lib/mockData'
 import { Equipment, EquipmentJustification, SiteLocation, SystemRanking } from '@/types'
 import { buildEquipmentJustification, buildFinancialHealthMetrics, getHealthStatusColor, getHealthStatusText } from '@/lib/utils'
+import { westCorpAlarms, westCorpMonthlyEquipmentSnapshots, westCorpMonthlySummaries, westCorpSiteMonthlySnapshots } from '@/lib/westCorpOperationalData'
+import { WEST_CORP_SITE_ID } from '@/lib/westCorpData'
 import { TrendingUp, TrendingDown, Activity, AlertTriangle, Minus, Printer } from 'lucide-react'
 
 type PdfColor = [number, number, number]
@@ -242,12 +244,84 @@ function getStatusPalette(status: Equipment['status']) {
 }
 
 export function Dashboard() {
-  const { selectedClient, selectedSite } = useScope()
-  const availableMonths = mockMonthlySummaries
+  const { selectedClient, selectedSite, availableClients, availableSites } = useScope()
+  const allEquipmentSnapshots = useMemo(
+    () => [
+      ...mockMonthlyEquipmentSnapshots.map((snapshot) => ({
+        ...snapshot,
+        siteId: snapshot.siteId ?? 'serasa-pdc',
+      })),
+      ...westCorpMonthlyEquipmentSnapshots,
+    ],
+    []
+  )
+  const allSiteSnapshots = useMemo(
+    () => [
+      ...mockSiteMonthlySnapshots.filter((snapshot) => snapshot.siteId !== WEST_CORP_SITE_ID),
+      ...westCorpSiteMonthlySnapshots,
+    ],
+    []
+  )
+  const allCurrentSites = useMemo(() => {
+    const sortedWestSnapshots = [...westCorpSiteMonthlySnapshots].sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+    const latestWestSnapshot = sortedWestSnapshots[sortedWestSnapshots.length - 1]
+    return mockSites.map((site) => (site.siteId === WEST_CORP_SITE_ID && latestWestSnapshot ? latestWestSnapshot : site))
+  }, [])
+  const allAlarms = useMemo(() => [...mockAlarms, ...westCorpAlarms], [])
+  const allScopedSummaries = useMemo(() => {
+    const grouped = new Map<string, typeof allEquipmentSnapshots>()
+
+    allEquipmentSnapshots.forEach((snapshot) => {
+      const matchesClient = selectedClient === 'all-clients' || snapshot.client === selectedClient
+      const matchesSite = selectedSite === 'all-sites' || snapshot.siteId === selectedSite
+
+      if (!matchesClient || !matchesSite) {
+        return
+      }
+
+      const current = grouped.get(snapshot.monthKey) ?? []
+      current.push(snapshot)
+      grouped.set(snapshot.monthKey, current)
+    })
+
+    return Array.from(grouped.entries())
+      .map(([monthKey, snapshots]) => {
+        const count = snapshots.length || 1
+        const sortedSnapshots = [...snapshots].sort((a, b) => a.startDate.localeCompare(b.startDate))
+        return {
+          monthKey,
+          month: sortedSnapshots[0]?.month ?? westCorpMonthlySummaries.find((summary) => summary.monthKey === monthKey)?.month ?? monthKey,
+          startDate: sortedSnapshots[0]?.startDate ?? `${monthKey}-01`,
+          endDate: sortedSnapshots[sortedSnapshots.length - 1]?.endDate ?? `${monthKey}-30`,
+          health: Number((sortedSnapshots.reduce((sum, item) => sum + item.health, 0) / count).toFixed(2)),
+          target: 90,
+          availability: Number((sortedSnapshots.reduce((sum, item) => sum + item.availability, 0) / count).toFixed(2)),
+          mttr: Number((sortedSnapshots.reduce((sum, item) => sum + item.mttr, 0) / count).toFixed(2)),
+          totalOccurrences: sortedSnapshots.reduce((sum, item) => sum + item.totalOccurrences, 0),
+          affectedEquipment: sortedSnapshots.filter((item) => item.totalOccurrences > 0).length,
+        }
+      })
+      .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+  }, [allEquipmentSnapshots, selectedClient, selectedSite])
+  const availableMonths = allScopedSummaries
   const [startMonth, setStartMonth] = useState(availableMonths[0]?.monthKey ?? '')
   const [endMonth, setEndMonth] = useState(availableMonths[availableMonths.length - 1]?.monthKey ?? '')
   const [showMttrDetails, setShowMttrDetails] = useState(false)
   const [showFinancialDetails, setShowFinancialDetails] = useState(false)
+
+  useEffect(() => {
+    if (availableMonths.length === 0) {
+      setStartMonth('')
+      setEndMonth('')
+      return
+    }
+
+    const firstMonth = availableMonths[0].monthKey
+    const lastMonth = availableMonths[availableMonths.length - 1].monthKey
+
+    setStartMonth((current) => (availableMonths.some((summary) => summary.monthKey === current) ? current : firstMonth))
+    setEndMonth((current) => (availableMonths.some((summary) => summary.monthKey === current) ? current : lastMonth))
+  }, [availableMonths])
 
   const selectedSummaries = useMemo(() => {
     if (!startMonth || !endMonth) {
@@ -255,8 +329,8 @@ export function Dashboard() {
     }
 
     const [from, to] = startMonth <= endMonth ? [startMonth, endMonth] : [endMonth, startMonth]
-    return mockMonthlySummaries.filter((summary) => summary.monthKey >= from && summary.monthKey <= to)
-  }, [startMonth, endMonth])
+    return allScopedSummaries.filter((summary) => summary.monthKey >= from && summary.monthKey <= to)
+  }, [allScopedSummaries, endMonth, startMonth])
 
   const selectedSnapshots = useMemo(() => {
     if (selectedSummaries.length === 0) {
@@ -264,8 +338,13 @@ export function Dashboard() {
     }
 
     const monthKeys = new Set(selectedSummaries.map((summary) => summary.monthKey))
-    return mockMonthlyEquipmentSnapshots.filter((snapshot) => monthKeys.has(snapshot.monthKey))
-  }, [selectedSummaries])
+    return allEquipmentSnapshots.filter((snapshot) => {
+      const matchesMonth = monthKeys.has(snapshot.monthKey)
+      const matchesClient = selectedClient === 'all-clients' || snapshot.client === selectedClient
+      const matchesSite = selectedSite === 'all-sites' || snapshot.siteId === selectedSite
+      return matchesMonth && matchesClient && matchesSite
+    })
+  }, [allEquipmentSnapshots, selectedClient, selectedSite, selectedSummaries])
 
   const aggregatedEquipment = useMemo(() => {
     const equipmentMap = new Map<string, Equipment & { _count: number }>()
@@ -361,8 +440,15 @@ export function Dashboard() {
     }
 
     const monthKeys = new Set(selectedSummaries.map((summary) => summary.monthKey))
-    return mockAlarms.filter((alarm) => monthKeys.has(alarm.createdAt.slice(0, 7)))
-  }, [selectedSummaries])
+    const relevantEquipmentIds = new Set(selectedSnapshots.map((snapshot) => snapshot.id))
+
+    return allAlarms.filter((alarm) => {
+      const matchesMonth = monthKeys.has(alarm.createdAt.slice(0, 7))
+      const matchesClient = selectedClient === 'all-clients' || alarm.clientName === selectedClient
+      const matchesSite = selectedSite === 'all-sites' || relevantEquipmentIds.has(alarm.equipmentId)
+      return matchesMonth && matchesClient && matchesSite
+    })
+  }, [allAlarms, selectedClient, selectedSite, selectedSnapshots, selectedSummaries])
 
   const filteredPredictiveTasks = useMemo(() => {
     const relevantEquipmentIds = new Set([
@@ -371,62 +457,87 @@ export function Dashboard() {
     ])
 
     if (relevantEquipmentIds.size === 0) {
-      return mockPredictiveTasks
+      return []
     }
 
     return mockPredictiveTasks.filter((task) => relevantEquipmentIds.has(task.equipmentId))
   }, [aggregatedEquipment, filteredAlarms])
 
   const siteSummaries = useMemo<SiteLocation[]>(() => {
-    if (mockSites.length === 0) {
+    if (allCurrentSites.length === 0) {
       return []
     }
 
     if (selectedSummaries.length === 0) {
-      return mockSites
+      return allCurrentSites.filter((site) => {
+        const matchesClient = selectedClient === 'all-clients' || site.cliente === selectedClient
+        const matchesSite = selectedSite === 'all-sites' || site.siteId === selectedSite
+        return matchesClient && matchesSite
+      })
     }
 
-    const baseSite = mockSites[0]
-    const impactedSnapshots = selectedSnapshots.filter((snapshot) => snapshot.totalOccurrences > 0)
-    const snapshotSource = impactedSnapshots.length > 0 ? impactedSnapshots : selectedSnapshots
-    const snapshotCount = snapshotSource.length || 1
-    const criticalOccurrences = filteredAlarms.filter((alarm) => alarm.type === 'critical').length
-    const currentPeriodEndDate = selectedSummaries[selectedSummaries.length - 1]?.endDate ?? baseSite.ultimaAtualizacao
-
-    return [
-      {
-        ...baseSite,
-        saudeGeral: dashboardMetrics.averageHealth,
-        disponibilidade: dashboardMetrics.averageAvailability,
-        conforto: Number(
-          (
-            snapshotSource.reduce((sum, snapshot) => sum + snapshot.comfort, 0) /
-            snapshotCount
-          ).toFixed(2)
-        ),
-        performance: Number(
-          (
-            snapshotSource.reduce((sum, snapshot) => sum + snapshot.performance, 0) /
-            snapshotCount
-          ).toFixed(2)
-        ),
-        ocorrenciasCriticas: criticalOccurrences,
-        ultimaAtualizacao: currentPeriodEndDate,
-      },
-    ]
-  }, [dashboardMetrics.averageAvailability, dashboardMetrics.averageHealth, filteredAlarms, selectedSnapshots, selectedSummaries])
-
-  const visibleSiteSummaries = useMemo(() => {
-    return siteSummaries.filter((site) => {
-      const matchesClient = selectedClient === 'all-clients' || site.cliente === selectedClient
-      const matchesSite = selectedSite === 'all-sites' || site.siteId === selectedSite
-      return matchesClient && matchesSite
+    const monthKeys = new Set(selectedSummaries.map((summary) => summary.monthKey))
+    const scopedSiteSnapshots = allSiteSnapshots.filter((snapshot) => {
+      const matchesMonth = monthKeys.has(snapshot.monthKey)
+      const matchesClient = selectedClient === 'all-clients' || snapshot.cliente === selectedClient
+      const matchesSite = selectedSite === 'all-sites' || snapshot.siteId === selectedSite
+      return matchesMonth && matchesClient && matchesSite
     })
-  }, [selectedClient, selectedSite, siteSummaries])
+
+    if (scopedSiteSnapshots.length === 0) {
+      return allCurrentSites
+    }
+
+    const groupedSites = new Map<string, SiteLocation & { _count: number }>()
+
+    scopedSiteSnapshots.forEach((snapshot) => {
+      const current = groupedSites.get(snapshot.siteId)
+
+      if (!current) {
+        groupedSites.set(snapshot.siteId, {
+          ...snapshot,
+          _count: 1,
+        })
+        return
+      }
+
+      current.saudeGeral += snapshot.saudeGeral
+      current.disponibilidade += snapshot.disponibilidade
+      current.conforto += snapshot.conforto
+      current.performance += snapshot.performance
+      current.ocorrenciasCriticas += snapshot.ocorrenciasCriticas
+      current.ultimaAtualizacao = snapshot.ultimaAtualizacao
+      current._count += 1
+      groupedSites.set(snapshot.siteId, current)
+    })
+
+    return Array.from(groupedSites.values()).map(({ _count, ...site }) => ({
+      ...site,
+      saudeGeral: Number((site.saudeGeral / _count).toFixed(2)),
+      disponibilidade: Number((site.disponibilidade / _count).toFixed(2)),
+      conforto: Number((site.conforto / _count).toFixed(2)),
+      performance: Number((site.performance / _count).toFixed(2)),
+      ocorrenciasCriticas: Number((site.ocorrenciasCriticas / _count).toFixed(0)),
+    }))
+  }, [allCurrentSites, allSiteSnapshots, selectedClient, selectedSite, selectedSummaries])
+
+  const visibleSiteSummaries = siteSummaries
 
   const highlightedEquipment = useMemo(
-    () => (aggregatedEquipment.length > 0 ? aggregatedEquipment : mockEquipment.slice(0, 3)).slice(0, 3),
-    [aggregatedEquipment]
+    () =>
+      (
+        aggregatedEquipment.length > 0
+          ? aggregatedEquipment
+          : mockEquipment.filter((equipment) => {
+              const matchesClient = selectedClient === 'all-clients' || equipment.client === selectedClient
+              const matchesSite =
+                selectedSite === 'all-sites' ||
+                (selectedSite === 'serasa-pdc' && equipment.client === 'Serasa Experian') ||
+                equipment.siteId === selectedSite
+              return matchesClient && matchesSite
+            })
+      ).slice(0, 3),
+    [aggregatedEquipment, selectedClient, selectedSite]
   )
 
   const equipmentJustifications = useMemo(() => {
@@ -450,15 +561,34 @@ export function Dashboard() {
 
   const currentSummary = selectedSummaries[selectedSummaries.length - 1]
   const currentSummaryIndex = currentSummary
-    ? mockMonthlySummaries.findIndex((summary) => summary.monthKey === currentSummary.monthKey)
+    ? allScopedSummaries.findIndex((summary) => summary.monthKey === currentSummary.monthKey)
     : -1
-  const previousSummary = currentSummaryIndex > 0 ? mockMonthlySummaries[currentSummaryIndex - 1] : null
+  const previousSummary = currentSummaryIndex > 0 ? allScopedSummaries[currentSummaryIndex - 1] : null
 
   const availabilityDelta = previousSummary ? Number((currentSummary.availability - previousSummary.availability).toFixed(2)) : 0
   const mttrDelta = previousSummary ? Number((currentSummary.mttr - previousSummary.mttr).toFixed(2)) : 0
   const selectedPeriodLabel = selectedSummaries.length > 0
     ? `${selectedSummaries[0].month} a ${selectedSummaries[selectedSummaries.length - 1].month}`
     : 'Periodo sem dados'
+  const selectedClientLabel =
+    selectedClient === 'all-clients'
+      ? 'Todos os clientes'
+      : availableClients.find((client) => client.id === selectedClient)?.label ?? selectedClient
+  const selectedSiteLabel =
+    selectedSite === 'all-sites'
+      ? 'Todos os sites'
+      : availableSites.find((site) => site.id === selectedSite)?.label ?? selectedSite
+  const reportScopeTitle = selectedSite !== 'all-sites' ? selectedSiteLabel : selectedClientLabel
+  const reportScopeDescription =
+    selectedSite !== 'all-sites'
+      ? `Cliente: ${selectedClientLabel} | Site: ${selectedSiteLabel}`
+      : selectedClient === 'all-clients'
+        ? 'Escopo: visão consolidada de todos os clientes e sites'
+        : `Cliente: ${selectedClientLabel} | Site: todos os sites`
+  const reportGeneratedLabel = new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(new Date())
 
   const renderTrend = (delta: number, reverseGood = false) => {
     if (delta === 0) {
@@ -502,8 +632,8 @@ export function Dashboard() {
     const createEquipmentPage = () => {
       const page: PdfBlock[] = [
         { kind: 'rect', x: 0, y: 720, width: 612, height: 72, fillColor: [80, 32, 68] },
-        { kind: 'text', text: 'Justificativas dos Equipamentos', x: 44, y: 752, size: 20, color: [255, 255, 255], bold: true },
-        { kind: 'text', text: 'Principais evidencias para apresentacao ao cliente', x: 44, y: 730, size: 11, color: [243, 244, 246] },
+        { kind: 'text', text: `Justificativas - ${reportScopeTitle}`, x: 44, y: 752, size: 20, color: [255, 255, 255], bold: true },
+        { kind: 'text', text: `Principais evidencias do escopo ${reportScopeDescription}`, x: 44, y: 730, size: 11, color: [243, 244, 246] },
       ]
 
       detailPages.push(page)
@@ -514,9 +644,10 @@ export function Dashboard() {
       { kind: 'rect', x: 0, y: 682, width: 612, height: 110, fillColor: [80, 32, 68] },
       { kind: 'rect', x: 0, y: 665, width: 612, height: 18, fillColor: [166, 48, 86] },
       { kind: 'text', text: 'EMS | Relatorio Gerencial', x: 44, y: 742, size: 22, color: [255, 255, 255], bold: true },
-      { kind: 'text', text: 'Overview executivo do dashboard', x: 44, y: 718, size: 12, color: [243, 244, 246] },
+      { kind: 'text', text: `Relatorio executivo automatico - ${reportScopeTitle}`, x: 44, y: 718, size: 12, color: [243, 244, 246] },
       { kind: 'text', text: `Periodo analisado: ${selectedPeriodLabel}`, x: 390, y: 742, size: 11, color: [255, 255, 255], bold: true },
-      { kind: 'text', text: `Gerado em ${new Date().toLocaleDateString('pt-BR')}`, x: 390, y: 720, size: 10, color: [229, 231, 235] }
+      { kind: 'text', text: reportScopeDescription, x: 44, y: 698, size: 10, color: [229, 231, 235] },
+      { kind: 'text', text: `Gerado em ${reportGeneratedLabel}`, x: 390, y: 720, size: 10, color: [229, 231, 235] }
     )
 
       const kpiCards = [
@@ -537,7 +668,7 @@ export function Dashboard() {
       })
 
       pageOne.push(
-        { kind: 'text', text: 'Ranking de Alarmes', x: 44, y: 408, size: 16, color: [15, 23, 42], bold: true },
+        { kind: 'text', text: `Ranking de Alarmes - ${reportScopeTitle}`, x: 44, y: 408, size: 16, color: [15, 23, 42], bold: true },
         { kind: 'rect', x: 44, y: 150, width: 524, height: 236, fillColor: [255, 255, 255], strokeColor: [226, 232, 240], lineWidth: 1 },
         { kind: 'rect', x: 44, y: 354, width: 524, height: 32, fillColor: [248, 250, 252] }
       )
@@ -572,7 +703,7 @@ export function Dashboard() {
       )
       addWrappedText(
         pageOne,
-        `No periodo ${selectedPeriodLabel}, o dashboard consolidou ${dashboardMetrics.totalOccurrences} ocorrencias em ${dashboardMetrics.affectedEquipment} equipamentos, com saude media de ${dashboardMetrics.averageHealth}% e disponibilidade media de ${dashboardMetrics.averageAvailability}%.`,
+        `No periodo ${selectedPeriodLabel}, o escopo ${reportScopeDescription} consolidou ${dashboardMetrics.totalOccurrences} ocorrencias em ${dashboardMetrics.affectedEquipment} equipamentos, com saude media de ${dashboardMetrics.averageHealth}% e disponibilidade media de ${dashboardMetrics.averageAvailability}%.`,
         58,
         82,
         { size: 10, color: [51, 65, 85], maxLength: 88, lineGap: 4 }
@@ -645,8 +776,8 @@ export function Dashboard() {
 
       const pageThree: PdfBlock[] = [
         { kind: 'rect', x: 0, y: 720, width: 612, height: 72, fillColor: [80, 32, 68] },
-        { kind: 'text', text: 'Complementos do Overview', x: 44, y: 752, size: 20, color: [255, 255, 255], bold: true },
-        { kind: 'text', text: 'Analises preditivas e follow-up para encaminhamento', x: 44, y: 730, size: 11, color: [243, 244, 246] },
+        { kind: 'text', text: `Complementos - ${reportScopeTitle}`, x: 44, y: 752, size: 20, color: [255, 255, 255], bold: true },
+        { kind: 'text', text: `Analises preditivas e follow-up do periodo ${selectedPeriodLabel}`, x: 44, y: 730, size: 11, color: [243, 244, 246] },
         { kind: 'text', text: 'Analises Preditivas', x: 44, y: 660, size: 16, color: [15, 23, 42], bold: true },
         { kind: 'rect', x: 44, y: 382, width: 252, height: 250, fillColor: [255, 255, 255], strokeColor: [226, 232, 240], lineWidth: 1 },
         { kind: 'text', text: 'Alarmes com Follow-up', x: 316, y: 660, size: 16, color: [15, 23, 42], bold: true },
@@ -700,11 +831,11 @@ export function Dashboard() {
       }
 
       pageThree.push(
-        { kind: 'text', text: 'Documento gerado automaticamente a partir do dashboard EMS.', x: 44, y: 88, size: 10, color: [100, 116, 139] }
+        { kind: 'text', text: `Documento gerado automaticamente a partir do dashboard EMS para ${reportScopeDescription}.`, x: 44, y: 88, size: 10, color: [100, 116, 139] }
       )
 
     const pdfBlob = buildPdfBlob([pageOne, ...detailPages, pageThree])
-    const fileName = `ems-overview-${sanitizeFilename(selectedPeriodLabel || 'periodo')}.pdf`
+    const fileName = `ems-relatorio-${sanitizeFilename(reportScopeTitle)}-${sanitizeFilename(selectedPeriodLabel || 'periodo')}.pdf`
     const downloadUrl = URL.createObjectURL(pdfBlob)
     const link = document.createElement('a')
     link.href = downloadUrl
@@ -761,7 +892,7 @@ export function Dashboard() {
               className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
             >
               <Printer className="h-4 w-4" />
-              Exportar overview em PDF
+              Exportar PDF do escopo atual
             </button>
             {currentSummary && (
               <p className="mt-3 text-xs text-gray-500">

@@ -4,19 +4,33 @@ import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { AlarmsList } from '../components/alarms/AlarmsList'
 import { RecurringAlarms } from '../components/alarms/RecurringAlarms'
 import { mockAlarms } from '../lib/mockData'
+import { westCorpAlarms } from '@/lib/westCorpOperationalData'
+import { useScope } from '@/hooks/useScope'
+import { WEST_CORP_CLIENT, WEST_CORP_SITE_ID } from '@/lib/westCorpData'
 
 export function Alarms() {
+  const { selectedClient, selectedSite } = useScope()
   const [searchParams] = useSearchParams()
   const selectedEquipmentId = searchParams.get('equipmentId') ?? ''
   const selectedEquipmentName = searchParams.get('equipmentName') ?? ''
+  const scopedAlarms = useMemo(() => {
+    const combinedAlarms = [...mockAlarms, ...westCorpAlarms]
+    return combinedAlarms.filter((alarm) => {
+      const matchesClient = selectedClient === 'all-clients' || alarm.clientName === selectedClient
+      const matchesSite =
+        selectedSite === 'all-sites' ||
+        (selectedSite === WEST_CORP_SITE_ID ? alarm.clientName === WEST_CORP_CLIENT : alarm.clientName === 'Serasa Experian')
+      return matchesClient && matchesSite
+    })
+  }, [selectedClient, selectedSite])
 
   const filteredRecurringAlarms = useMemo(() => {
     if (!selectedEquipmentId) {
-      return mockAlarms
+      return scopedAlarms
     }
 
-    return mockAlarms.filter((alarm) => alarm.equipmentId === selectedEquipmentId)
-  }, [selectedEquipmentId])
+    return scopedAlarms.filter((alarm) => alarm.equipmentId === selectedEquipmentId)
+  }, [scopedAlarms, selectedEquipmentId])
 
   return (
     <DashboardLayout>
@@ -44,7 +58,7 @@ export function Alarms() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <AlarmsList
-              alarms={mockAlarms}
+              alarms={scopedAlarms}
               selectedEquipmentId={selectedEquipmentId}
               selectedEquipmentName={selectedEquipmentName}
             />

@@ -15,6 +15,7 @@ import {
   SiteLocation,
   SiteMonthlySnapshot
 } from '../types';
+import { westCorpSite } from './westCorpData';
 
 export const mockUser: User = {
   "id": "admin-1",
@@ -830,7 +831,8 @@ export const mockSites: SiteLocation[] = [
     "performance": 85,
     "ocorrenciasCriticas": 3,
     "ultimaAtualizacao": "30/06/2026"
-  }
+  },
+  westCorpSite
 ];
 
 export const mockSiteMonthlySnapshots: SiteMonthlySnapshot[] = [
@@ -866,6 +868,42 @@ export const mockSiteMonthlySnapshots: SiteMonthlySnapshot[] = [
     "conforto": 84,
     "performance": 85,
     "ocorrenciasCriticas": 3,
+    "ultimaAtualizacao": "30/06/2026",
+    "monthKey": "2026-06",
+    "month": "Jun/26"
+  },
+  {
+    "siteId": "west-corp-alameda-tocantins",
+    "nome": "West Corp - Alameda Tocantins",
+    "cliente": "West Corp",
+    "endereco": "Alameda Tocantins, 350",
+    "cidade": "Barueri",
+    "estado": "SP",
+    "latitude": -23.50221,
+    "longitude": -46.85119,
+    "saudeGeral": 88,
+    "disponibilidade": 92,
+    "conforto": 89,
+    "performance": 90,
+    "ocorrenciasCriticas": 0,
+    "ultimaAtualizacao": "31/05/2026",
+    "monthKey": "2026-05",
+    "month": "Mai/26"
+  },
+  {
+    "siteId": "west-corp-alameda-tocantins",
+    "nome": "West Corp - Alameda Tocantins",
+    "cliente": "West Corp",
+    "endereco": "Alameda Tocantins, 350",
+    "cidade": "Barueri",
+    "estado": "SP",
+    "latitude": -23.50221,
+    "longitude": -46.85119,
+    "saudeGeral": 88,
+    "disponibilidade": 92,
+    "conforto": 89,
+    "performance": 90,
+    "ocorrenciasCriticas": 0,
     "ultimaAtualizacao": "30/06/2026",
     "monthKey": "2026-06",
     "month": "Jun/26"
