@@ -43,8 +43,7 @@ export function PredictiveMaintenance() {
           <div className="rounded-xl border border-gray-200 bg-white p-6">
             <h3 className="text-lg font-semibold text-gray-900">Análises Técnicas Preditivas</h3>
             <p className="mt-3 text-sm leading-6 text-gray-500">
-              Nao ha tarefas preditivas cadastradas para o cliente/site selecionado. As analises atuais permanecem
-              disponiveis somente para a `Serasa Experian`.
+              Nao ha tarefas preditivas cadastradas para o cliente/site selecionado.
             </p>
           </div>
         )}
