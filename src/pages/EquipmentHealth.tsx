@@ -4,10 +4,15 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { EquipmentCard } from '@/components/equipment/EquipmentCard'
 import { EquipmentFilters } from '@/components/equipment/EquipmentFilters'
 import { mockAlarms, mockEquipment, mockPredictiveTasks } from '@/lib/mockData'
+import { SERASA_SITE_ID } from '@/lib/equipmentCatalog'
 import { buildEquipmentJustification } from '@/lib/utils'
 import { useScope } from '@/hooks/useScope'
 import { WEST_CORP_CLIENT, WEST_CORP_SITE_ID, WEST_CORP_SITE_NAME, westCorpSystems } from '@/lib/westCorpData'
 import { westCorpUnitHealthRollups } from '@/lib/westCorpOperationalData'
+
+function getEquipmentSiteId(equipment: { client: string; siteId?: string }) {
+  return equipment.siteId ?? (equipment.client === 'Serasa Experian' ? SERASA_SITE_ID : undefined)
+}
 
 export function EquipmentHealth() {
   const { selectedClient, selectedSite } = useScope()
@@ -27,9 +32,7 @@ export function EquipmentHealth() {
 
     return mockEquipment.filter((equipment) => {
       const matchesClient = selectedClient === 'all-clients' || equipment.client === selectedClient
-      const matchesSite =
-        selectedSite === 'all-sites' ||
-        (selectedSite === 'serasa-pdc' && equipment.client === 'Serasa Experian')
+      const matchesSite = selectedSite === 'all-sites' || getEquipmentSiteId(equipment) === selectedSite
       const matchesSearch =
         equipment.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         equipment.area.toLowerCase().includes(searchTerm.toLowerCase())
@@ -45,9 +48,7 @@ export function EquipmentHealth() {
       ? []
       : mockEquipment.filter((equipment) => {
           const matchesClient = selectedClient === 'all-clients' || equipment.client === selectedClient
-          const matchesSite =
-            selectedSite === 'all-sites' ||
-            (selectedSite === 'serasa-pdc' && equipment.client === 'Serasa Experian')
+          const matchesSite = selectedSite === 'all-sites' || getEquipmentSiteId(equipment) === selectedSite
           return matchesClient && matchesSite
         })
 

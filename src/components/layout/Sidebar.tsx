@@ -8,7 +8,8 @@ import {
   TrendingUp,
   Droplets,
   Users,
-  KanbanSquare
+  KanbanSquare,
+  Boxes
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
@@ -18,6 +19,7 @@ const navItems = [
   { path: '/equipment', label: 'Saúde dos Equipamentos', icon: Thermometer },
   { path: '/alarms', label: 'Alarmes', icon: AlertTriangle },
   { path: '/alert-management', label: 'Gestão de Alertas', icon: KanbanSquare },
+  { path: '/assets', label: 'Gestão de Ativos', icon: Boxes },
   { path: '/predictive', label: 'Manutenção Preditiva', icon: TrendingUp },
   { path: '/sustainability', label: 'Sustentabilidade', icon: Droplets },
   { path: '/users', label: 'Usuários', icon: Users, adminOnly: true },

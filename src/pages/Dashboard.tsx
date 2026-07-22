@@ -8,6 +8,7 @@ import { RankingView } from '@/components/dashboard/RankingView'
 import { SiteMap } from '@/components/dashboard/SiteMap'
 import { RecurringAlarms } from '@/components/alarms/RecurringAlarms'
 import { useScope } from '@/hooks/useScope'
+import { SERASA_SITE_ID } from '@/lib/equipmentCatalog'
 import {
   mockEquipment,
   mockMonthlyEquipmentSnapshots,
@@ -241,6 +242,10 @@ function getStatusPalette(status: Equipment['status']) {
     stroke: [74, 222, 128] as PdfColor,
     text: [21, 128, 61] as PdfColor,
   }
+}
+
+function getEquipmentSiteId(equipment: { client: string; siteId?: string }) {
+  return equipment.siteId ?? (equipment.client === 'Serasa Experian' ? SERASA_SITE_ID : undefined)
 }
 
 export function Dashboard() {
@@ -530,10 +535,7 @@ export function Dashboard() {
           ? aggregatedEquipment
           : mockEquipment.filter((equipment) => {
               const matchesClient = selectedClient === 'all-clients' || equipment.client === selectedClient
-              const matchesSite =
-                selectedSite === 'all-sites' ||
-                (selectedSite === 'serasa-pdc' && equipment.client === 'Serasa Experian') ||
-                equipment.siteId === selectedSite
+              const matchesSite = selectedSite === 'all-sites' || getEquipmentSiteId(equipment) === selectedSite
               return matchesClient && matchesSite
             })
       ).slice(0, 3),

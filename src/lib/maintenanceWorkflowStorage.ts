@@ -1,3 +1,4 @@
+import { applyScheduleMaterialConsumption, loadInventoryAssets } from '@/lib/assetInventoryStorage'
 import { appendAutomatedEquipmentHistoryEntry } from '@/lib/equipmentHistoryStorage'
 import {
   AlertKanbanColumn,
@@ -72,9 +73,11 @@ function buildSchedule(
   actor: User,
   id?: string,
   createdAt?: string,
-  createdBy?: string
+  createdBy?: string,
+  materialsAppliedAt?: string
 ): MaintenanceSchedule {
   const now = new Date().toISOString()
+  const assets = loadInventoryAssets()
   return {
     id: id ?? createId('schedule'),
     equipmentId: equipment.id,
@@ -88,10 +91,37 @@ function buildSchedule(
     maintenanceType: draft.maintenanceType,
     priority: draft.priority,
     observations: draft.observations.trim(),
+    materialsUsed: draft.materialsUsed.map((material) => ({
+      id: `${material.assetId}-${material.quantity}`,
+      assetId: material.assetId,
+      assetName: assets.find((asset) => asset.id === material.assetId)?.name ?? material.assetId,
+      quantity: material.quantity,
+      unit: assets.find((asset) => asset.id === material.assetId)?.unit ?? '',
+      observations: material.observations.trim(),
+    })),
     status: draft.status,
+    materialsAppliedAt,
     createdAt: createdAt ?? now,
     createdBy: createdBy ?? actor.name,
     updatedAt: now,
+    updatedBy: actor.name,
+  }
+}
+
+function finalizeScheduleMaterialsIfNeeded(
+  equipment: EquipmentHistoryTarget,
+  schedule: MaintenanceSchedule,
+  actor: User
+): MaintenanceSchedule {
+  if (schedule.status !== 'Finalizado' || schedule.materialsAppliedAt || schedule.materialsUsed.length === 0) {
+    return schedule
+  }
+
+  applyScheduleMaterialConsumption(equipment, schedule, actor)
+  return {
+    ...schedule,
+    materialsAppliedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     updatedBy: actor.name,
   }
 }
@@ -120,6 +150,11 @@ export function loadEquipmentSchedules(equipmentId: string) {
   return store.schedulesByEquipment[equipmentId] ?? []
 }
 
+export function loadAllEquipmentSchedules() {
+  const store = loadStore()
+  return Object.values(store.schedulesByEquipment).flat()
+}
+
 export function loadKanbanStates() {
   const store = loadStore()
   return store.kanbanByEquipment
@@ -127,7 +162,7 @@ export function loadKanbanStates() {
 
 export function createEquipmentSchedule(equipment: EquipmentHistoryTarget, draft: MaintenanceScheduleDraft, actor: User) {
   const store = loadStore()
-  const nextSchedule = buildSchedule(equipment, draft, actor)
+  const nextSchedule = finalizeScheduleMaterialsIfNeeded(equipment, buildSchedule(equipment, draft, actor), actor)
   const nextSchedules = [nextSchedule, ...(store.schedulesByEquipment[equipment.id] ?? [])]
   const nextStore: MaintenanceWorkflowStore = {
     schedulesByEquipment: {
@@ -149,6 +184,11 @@ export function createEquipmentSchedule(equipment: EquipmentHistoryTarget, draft
       `Tipo de manutencao: ${draft.maintenanceType}.`,
       `Prioridade: ${draft.priority}.`,
       `Status inicial: ${draft.status}.`,
+      draft.materialsUsed.length > 0
+        ? `Materiais reservados: ${nextSchedule.materialsUsed
+            .map((material) => `${material.assetName} (${material.quantity} ${material.unit || 'un'})`)
+            .join(', ')}.`
+        : '',
       draft.observations.trim() ? `Observacao: ${draft.observations.trim()}` : '',
     ]
       .filter(Boolean)
@@ -172,7 +212,19 @@ export function updateEquipmentSchedule(
 
   const nextSchedules = currentSchedules.map((schedule) =>
     schedule.id === scheduleId
-      ? buildSchedule(equipment, draft, actor, schedule.id, schedule.createdAt, schedule.createdBy)
+      ? finalizeScheduleMaterialsIfNeeded(
+          equipment,
+          buildSchedule(
+            equipment,
+            draft,
+            actor,
+            schedule.id,
+            schedule.createdAt,
+            schedule.createdBy,
+            schedule.materialsAppliedAt
+          ),
+          actor
+        )
       : schedule
   )
 
@@ -198,6 +250,12 @@ export function updateEquipmentSchedule(
       `Tecnico responsavel: ${draft.technician.trim() || 'Nao informado'}.`,
       `Tipo de manutencao: ${draft.maintenanceType}.`,
       `Prioridade: ${draft.priority}.`,
+      draft.materialsUsed.length > 0
+        ? `Materiais reservados: ${nextSchedules
+            .find((schedule) => schedule.id === scheduleId)
+            ?.materialsUsed.map((material) => `${material.assetName} (${material.quantity} ${material.unit || 'un'})`)
+            .join(', ')}.`
+        : '',
       draft.observations.trim() ? `Observacao: ${draft.observations.trim()}` : '',
     ]
       .filter(Boolean)
@@ -221,12 +279,12 @@ export function moveEquipmentKanbanCard(
 
     const updatedSchedules = (store.schedulesByEquipment[equipment.id] ?? []).map((schedule) =>
       schedule.id === relatedOpenSchedule.id
-        ? {
+        ? finalizeScheduleMaterialsIfNeeded(equipment, {
             ...schedule,
             status: mappedStatus,
             updatedAt: new Date().toISOString(),
             updatedBy: actor.name,
-          }
+          }, actor)
         : schedule
     )
 
@@ -280,12 +338,12 @@ export function registerScheduleStep(
 
   const nextSchedules = currentSchedules.map((schedule) =>
     schedule.id === scheduleId
-      ? {
+      ? finalizeScheduleMaterialsIfNeeded(equipment, {
           ...schedule,
           status: nextStatus,
           updatedAt: new Date().toISOString(),
           updatedBy: actor.name,
-        }
+        }, actor)
       : schedule
   )
 

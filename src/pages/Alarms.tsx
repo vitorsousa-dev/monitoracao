@@ -3,10 +3,10 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { AlarmsList } from '../components/alarms/AlarmsList'
 import { RecurringAlarms } from '../components/alarms/RecurringAlarms'
+import { findEquipmentCatalogItem } from '@/lib/equipmentCatalog'
 import { mockAlarms } from '../lib/mockData'
 import { westCorpAlarms } from '@/lib/westCorpOperationalData'
 import { useScope } from '@/hooks/useScope'
-import { WEST_CORP_CLIENT, WEST_CORP_SITE_ID } from '@/lib/westCorpData'
 
 export function Alarms() {
   const { selectedClient, selectedSite } = useScope()
@@ -16,10 +16,9 @@ export function Alarms() {
   const scopedAlarms = useMemo(() => {
     const combinedAlarms = [...mockAlarms, ...westCorpAlarms]
     return combinedAlarms.filter((alarm) => {
+      const alarmEquipment = findEquipmentCatalogItem(alarm.equipmentId)
       const matchesClient = selectedClient === 'all-clients' || alarm.clientName === selectedClient
-      const matchesSite =
-        selectedSite === 'all-sites' ||
-        (selectedSite === WEST_CORP_SITE_ID ? alarm.clientName === WEST_CORP_CLIENT : alarm.clientName === 'Serasa Experian')
+      const matchesSite = selectedSite === 'all-sites' || alarmEquipment?.siteId === selectedSite
       return matchesClient && matchesSite
     })
   }, [selectedClient, selectedSite])

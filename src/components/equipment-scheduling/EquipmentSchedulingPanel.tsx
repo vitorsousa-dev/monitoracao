@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import { CalendarClock, ClipboardCheck, Edit3, Plus, Wrench } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { loadInventoryAssets } from '@/lib/assetInventoryStorage'
 import {
   createEquipmentSchedule,
+  loadAllEquipmentSchedules,
   loadEquipmentSchedules,
   registerScheduleStep,
   updateEquipmentSchedule,
@@ -14,6 +16,7 @@ import {
   MaintenanceSchedulePriority,
   MaintenanceScheduleStatus,
   MaintenanceScheduleType,
+  ScheduleMaterialUsageDraft,
 } from '@/types'
 
 interface EquipmentSchedulingPanelProps {
@@ -40,14 +43,14 @@ const SCHEDULE_STEPS = [
 ] as const
 
 function getNowDraft(): MaintenanceScheduleDraft {
-  const now = new Date()
   return {
-    date: now.toISOString().slice(0, 10),
-    time: now.toTimeString().slice(0, 5),
+    date: '',
+    time: '',
     technician: '',
     maintenanceType: 'Preventiva',
     priority: 'Media',
     observations: '',
+    materialsUsed: [],
     status: 'Agendado',
   }
 }
@@ -60,6 +63,11 @@ function mapScheduleToDraft(schedule: MaintenanceSchedule): MaintenanceScheduleD
     maintenanceType: schedule.maintenanceType,
     priority: schedule.priority,
     observations: schedule.observations,
+    materialsUsed: schedule.materialsUsed.map((material) => ({
+      assetId: material.assetId,
+      quantity: material.quantity,
+      observations: material.observations,
+    })),
     status: schedule.status,
   }
 }
@@ -96,6 +104,30 @@ export function EquipmentSchedulingPanel({ equipment }: EquipmentSchedulingPanel
   const [formError, setFormError] = useState('')
 
   const schedules = useMemo(() => loadEquipmentSchedules(equipment.id), [equipment.id, version])
+  const scopedAssets = useMemo(
+    () =>
+      loadInventoryAssets().filter(
+        (asset) => asset.clientName === equipment.client && (!asset.siteId || asset.siteId === equipment.siteId)
+      ),
+    [equipment.client, equipment.siteId, version]
+  )
+  const reservedByAsset = useMemo(() => {
+    const reservations = new Map<string, number>()
+    const openSchedules = loadAllEquipmentSchedules().filter(
+      (schedule) =>
+        (schedule.status === 'Agendado' || schedule.status === 'Em andamento') &&
+        !schedule.materialsAppliedAt &&
+        schedule.id !== editingScheduleId
+    )
+
+    openSchedules.forEach((schedule) => {
+      schedule.materialsUsed.forEach((material) => {
+        reservations.set(material.assetId, (reservations.get(material.assetId) ?? 0) + material.quantity)
+      })
+    })
+
+    return reservations
+  }, [editingScheduleId, version])
   const canEdit = user?.role === 'admin' || user?.role === 'manager'
 
   const resetForm = () => {
@@ -121,6 +153,29 @@ export function EquipmentSchedulingPanel({ equipment }: EquipmentSchedulingPanel
     resetForm()
   }
 
+  const handleMaterialChange = (index: number, field: keyof ScheduleMaterialUsageDraft, value: string | number) => {
+    setDraft((current) => ({
+      ...current,
+      materialsUsed: current.materialsUsed.map((material, materialIndex) =>
+        materialIndex === index ? { ...material, [field]: value } : material
+      ),
+    }))
+  }
+
+  const addMaterialRow = () => {
+    setDraft((current) => ({
+      ...current,
+      materialsUsed: [...current.materialsUsed, { assetId: '', quantity: 0, observations: '' }],
+    }))
+  }
+
+  const removeMaterialRow = (index: number) => {
+    setDraft((current) => ({
+      ...current,
+      materialsUsed: current.materialsUsed.filter((_, materialIndex) => materialIndex !== index),
+    }))
+  }
+
   const handleSubmit = () => {
     if (!user) {
       setFormError('E necessario estar autenticado para salvar agendamentos.')
@@ -134,6 +189,14 @@ export function EquipmentSchedulingPanel({ equipment }: EquipmentSchedulingPanel
 
     if (!draft.date || !draft.time || !draft.technician.trim()) {
       setFormError('Preencha data, hora e tecnico responsavel.')
+      return
+    }
+
+    const hasInvalidMaterials = draft.materialsUsed.some(
+      (material) => !material.assetId || !Number.isFinite(material.quantity) || material.quantity <= 0
+    )
+    if (hasInvalidMaterials) {
+      setFormError('Preencha corretamente os materiais utilizados antes de salvar.')
       return
     }
 
@@ -307,6 +370,104 @@ export function EquipmentSchedulingPanel({ equipment }: EquipmentSchedulingPanel
             />
           </label>
 
+          <div className="mt-4 rounded-2xl border border-gray-200 bg-slate-50 p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h5 className="text-sm font-semibold text-gray-900">Materiais utilizados</h5>
+                <p className="mt-1 text-xs text-gray-500">
+                  Os materiais ficam reservados para esta manutencao e a baixa automatica ocorre somente quando o
+                  agendamento for concluido.
+                </p>
+              </div>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={addMaterialRow}
+                  className="inline-flex items-center rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                >
+                  <Plus className="mr-2 h-3.5 w-3.5" />
+                  Adicionar material
+                </button>
+              )}
+            </div>
+
+            {draft.materialsUsed.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {draft.materialsUsed.map((material, index) => {
+                  const selectedAsset = scopedAssets.find((asset) => asset.id === material.assetId)
+                  const reserved = material.assetId ? reservedByAsset.get(material.assetId) ?? 0 : 0
+                  const available = selectedAsset ? Math.max(0, selectedAsset.quantityCurrent - reserved) : 0
+
+                  return (
+                    <div key={`${material.assetId || 'material'}-${index}`} className="rounded-xl border border-white bg-white p-4">
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <label className="space-y-2 xl:col-span-2">
+                          <span className="text-sm font-medium text-gray-700">Item do estoque</span>
+                          <select
+                            value={material.assetId}
+                            onChange={(event) => handleMaterialChange(index, 'assetId', event.target.value)}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-700 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                          >
+                            <option value="">Selecione um item</option>
+                            {scopedAssets.map((asset) => {
+                              const itemReserved = reservedByAsset.get(asset.id) ?? 0
+                              const itemAvailable = Math.max(0, asset.quantityCurrent - itemReserved)
+                              return (
+                                <option key={asset.id} value={asset.id}>
+                                  {asset.name} • disponivel {itemAvailable} {asset.unit}
+                                </option>
+                              )
+                            })}
+                          </select>
+                        </label>
+                        <label className="space-y-2">
+                          <span className="text-sm font-medium text-gray-700">Quantidade</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.001"
+                            value={material.quantity}
+                            onChange={(event) => handleMaterialChange(index, 'quantity', Number(event.target.value) || 0)}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-700 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                          />
+                        </label>
+                        <div className="flex items-end">
+                          <button
+                            type="button"
+                            onClick={() => removeMaterialRow(index)}
+                            className="w-full rounded-lg border border-red-200 px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                        <label className="block flex-1 space-y-2">
+                          <span className="text-sm font-medium text-gray-700">Observacao do material</span>
+                          <input
+                            type="text"
+                            value={material.observations}
+                            onChange={(event) => handleMaterialChange(index, 'observations', event.target.value)}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-700 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                          />
+                        </label>
+                        {selectedAsset && (
+                          <p className="text-xs text-gray-500">
+                            Reservado no momento: {reserved} {selectedAsset.unit} • disponivel: {available} {selectedAsset.unit}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-white p-4 text-sm text-gray-500">
+                Nenhum material vinculado a este agendamento.
+              </div>
+            )}
+          </div>
+
           {formError && (
             <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{formError}</div>
           )}
@@ -349,6 +510,24 @@ export function EquipmentSchedulingPanel({ equipment }: EquipmentSchedulingPanel
                     </span>
                   </div>
                   {schedule.observations && <p className="mt-3 text-sm leading-6 text-gray-600">{schedule.observations}</p>}
+                  {schedule.materialsUsed.length > 0 && (
+                    <div className="mt-4 rounded-xl border border-primary/10 bg-primary/5 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-primary">Materiais vinculados</p>
+                      <div className="mt-2 space-y-1 text-sm text-gray-600">
+                        {schedule.materialsUsed.map((material) => (
+                          <p key={material.id}>
+                            {material.assetName} • {material.quantity} {material.unit || 'un'}
+                            {material.observations ? ` • ${material.observations}` : ''}
+                          </p>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-xs text-gray-500">
+                        {schedule.materialsAppliedAt
+                          ? 'Baixa automatica do estoque ja aplicada neste agendamento.'
+                          : 'Baixa automatica pendente para o momento da conclusao.'}
+                      </p>
+                    </div>
+                  )}
                 </div>
                 {canEdit && (
                   <button

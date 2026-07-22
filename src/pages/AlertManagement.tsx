@@ -4,7 +4,7 @@ import { AlertTriangle, CalendarClock, GripVertical, Wrench } from 'lucide-react
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { useScope } from '@/hooks/useScope'
 import { useAuth } from '@/hooks/useAuth'
-import { findEquipmentCatalogItem, SERASA_SITE_ID } from '@/lib/equipmentCatalog'
+import { findEquipmentCatalogItem } from '@/lib/equipmentCatalog'
 import { loadEquipmentSchedules, loadKanbanStates, moveEquipmentKanbanCard } from '@/lib/maintenanceWorkflowStorage'
 import { mockAlarms } from '@/lib/mockData'
 import { westCorpAlarms } from '@/lib/westCorpOperationalData'
@@ -44,10 +44,7 @@ const COLUMN_META: Array<{
 function isAlarmScoped(alarm: Alarm, selectedClient: string, selectedSite: string) {
   const alarmEquipment = findEquipmentCatalogItem(alarm.equipmentId)
   const matchesClient = selectedClient === 'all-clients' || alarm.clientName === selectedClient
-  const matchesSite =
-    selectedSite === 'all-sites' ||
-    (selectedSite === SERASA_SITE_ID && alarm.clientName === 'Serasa Experian') ||
-    alarmEquipment?.siteId === selectedSite
+  const matchesSite = selectedSite === 'all-sites' || alarmEquipment?.siteId === selectedSite
 
   return matchesClient && matchesSite
 }

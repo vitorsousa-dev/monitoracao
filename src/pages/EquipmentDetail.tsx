@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, AlertTriangle, Activity, CalendarClock, History } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, Activity, CalendarClock, Droplets, History } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { EquipmentStatusBadge } from '@/components/equipment/EquipmentStatusBadge'
 import { PerformanceGauge } from '@/components/charts/PerformanceGauge'
 import { EquipmentHistoryPanel } from '@/components/equipment-history/EquipmentHistoryPanel'
+import { EquipmentRefrigerantPanel } from '@/components/equipment-refrigerant/EquipmentRefrigerantPanel'
 import { EquipmentSchedulingPanel } from '@/components/equipment-scheduling/EquipmentSchedulingPanel'
 import { findEquipmentCatalogItem } from '@/lib/equipmentCatalog'
 import { useAuth } from '@/hooks/useAuth'
@@ -13,11 +14,13 @@ export function EquipmentDetail() {
   const { id } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const { hasClientAccess } = useAuth()
-  const [activeTab, setActiveTab] = useState<'summary' | 'history' | 'scheduling'>(
+  const [activeTab, setActiveTab] = useState<'summary' | 'history' | 'scheduling' | 'refrigerant'>(
     searchParams.get('tab') === 'history'
       ? 'history'
       : searchParams.get('tab') === 'scheduling'
         ? 'scheduling'
+        : searchParams.get('tab') === 'refrigerant'
+          ? 'refrigerant'
         : 'summary'
   )
   const equipment = useMemo(() => (id ? findEquipmentCatalogItem(id) : undefined), [id])
@@ -28,11 +31,13 @@ export function EquipmentDetail() {
         ? 'history'
         : searchParams.get('tab') === 'scheduling'
           ? 'scheduling'
+          : searchParams.get('tab') === 'refrigerant'
+            ? 'refrigerant'
           : 'summary'
     setActiveTab(requestedTab)
   }, [searchParams])
 
-  const handleTabChange = (tab: 'summary' | 'history' | 'scheduling') => {
+  const handleTabChange = (tab: 'summary' | 'history' | 'scheduling' | 'refrigerant') => {
     setActiveTab(tab)
     const nextSearchParams = new URLSearchParams(searchParams)
     nextSearchParams.set('tab', tab)
@@ -112,6 +117,16 @@ export function EquipmentDetail() {
             <CalendarClock className="mr-2 h-4 w-4" />
             Agendamento
           </button>
+          <button
+            type="button"
+            onClick={() => handleTabChange('refrigerant')}
+            className={`inline-flex items-center rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === 'refrigerant' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <Droplets className="mr-2 h-4 w-4" />
+            Fluido
+          </button>
         </div>
 
         {activeTab === 'summary' ? (
@@ -174,6 +189,8 @@ export function EquipmentDetail() {
           </>
         ) : activeTab === 'history' ? (
           <EquipmentHistoryPanel equipment={equipment} />
+        ) : activeTab === 'refrigerant' ? (
+          <EquipmentRefrigerantPanel equipment={equipment} />
         ) : (
           <EquipmentSchedulingPanel equipment={equipment} />
         )}

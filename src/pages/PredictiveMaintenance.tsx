@@ -1,8 +1,13 @@
 import { useMemo } from 'react'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { PredictiveTasks } from '../components/predictive/PredictiveTasks'
+import { SERASA_SITE_ID } from '@/lib/equipmentCatalog'
 import { mockEquipment, mockPredictiveTasks } from '../lib/mockData'
 import { useScope } from '@/hooks/useScope'
+
+function getEquipmentSiteId(equipment: { client: string; siteId?: string }) {
+  return equipment.siteId ?? (equipment.client === 'Serasa Experian' ? SERASA_SITE_ID : undefined)
+}
 
 export function PredictiveMaintenance() {
   const { selectedClient, selectedSite } = useScope()
@@ -12,10 +17,7 @@ export function PredictiveMaintenance() {
       mockEquipment
         .filter((equipment) => {
           const matchesClient = selectedClient === 'all-clients' || equipment.client === selectedClient
-          const matchesSite =
-            selectedSite === 'all-sites' ||
-            (selectedSite === 'serasa-pdc' && equipment.client === 'Serasa Experian') ||
-            equipment.siteId === selectedSite
+          const matchesSite = selectedSite === 'all-sites' || getEquipmentSiteId(equipment) === selectedSite
 
           return matchesClient && matchesSite
         })

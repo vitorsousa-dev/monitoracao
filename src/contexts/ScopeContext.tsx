@@ -48,8 +48,8 @@ export function ScopeProvider({ children }: { children: ReactNode }) {
     return allClients.filter((client) => allowed.has(client.id))
   }, [allClients, canSelectAnyClient, user])
 
-  const [selectedClient, setSelectedClient] = useState<string>(ALL_CLIENTS_VALUE)
-  const [selectedSite, setSelectedSite] = useState<string>(ALL_SITES_VALUE)
+  const [selectedClient, setSelectedClientState] = useState<string>(ALL_CLIENTS_VALUE)
+  const [selectedSite, setSelectedSiteState] = useState<string>(ALL_SITES_VALUE)
 
   useEffect(() => {
     if (!user) {
@@ -57,7 +57,7 @@ export function ScopeProvider({ children }: { children: ReactNode }) {
     }
 
     if (canSelectAnyClient) {
-      setSelectedClient((current) => {
+      setSelectedClientState((current) => {
         if (current === ALL_CLIENTS_VALUE) {
           return current
         }
@@ -69,7 +69,7 @@ export function ScopeProvider({ children }: { children: ReactNode }) {
     }
 
     const defaultClient = allowedClients[0]?.id ?? ALL_CLIENTS_VALUE
-    setSelectedClient(defaultClient)
+    setSelectedClientState(defaultClient)
   }, [allowedClients, canSelectAnyClient, user])
 
   const availableSites = useMemo<ScopeOption[]>(() => {
@@ -84,7 +84,7 @@ export function ScopeProvider({ children }: { children: ReactNode }) {
   }, [selectedClient])
 
   useEffect(() => {
-    setSelectedSite((current) => {
+    setSelectedSiteState((current) => {
       if (current === ALL_SITES_VALUE) {
         return current
       }
@@ -93,6 +93,54 @@ export function ScopeProvider({ children }: { children: ReactNode }) {
       return exists ? current : ALL_SITES_VALUE
     })
   }, [availableSites])
+
+  const setSelectedClient = (value: string) => {
+    const nextClient =
+      !user || !canSelectAnyClient
+        ? allowedClients.some((client) => client.id === value)
+          ? value
+          : allowedClients[0]?.id ?? ALL_CLIENTS_VALUE
+        : value
+
+    if (nextClient === ALL_CLIENTS_VALUE) {
+      setSelectedClientState(ALL_CLIENTS_VALUE)
+      setSelectedSiteState(ALL_SITES_VALUE)
+      return
+    }
+
+    setSelectedClientState(nextClient)
+    setSelectedSiteState((current) => {
+      if (current === ALL_SITES_VALUE) {
+        return current
+      }
+
+      const currentSite = mockSites.find((site) => site.siteId === current)
+      return currentSite?.cliente === nextClient ? current : ALL_SITES_VALUE
+    })
+  }
+
+  const setSelectedSite = (value: string) => {
+    if (!value || value === ALL_SITES_VALUE) {
+      setSelectedSiteState(ALL_SITES_VALUE)
+      return
+    }
+
+    const site = mockSites.find((item) => item.siteId === value)
+    if (!site) {
+      setSelectedSiteState(ALL_SITES_VALUE)
+      return
+    }
+
+    if (!canSelectAnyClient && selectedClient !== site.cliente) {
+      return
+    }
+
+    if (canSelectAnyClient) {
+      setSelectedClientState(site.cliente)
+    }
+
+    setSelectedSiteState(site.siteId)
+  }
 
   return (
     <ScopeContext.Provider

@@ -272,6 +272,92 @@ export interface EquipmentHistoryTarget {
   source: 'equipment' | 'west-system' | 'west-unit'
 }
 
+export type InventoryAssetCategory = string
+
+export interface InventoryAsset {
+  id: string
+  clientName: string
+  siteId?: string
+  siteName?: string
+  name: string
+  category: InventoryAssetCategory
+  code: string
+  manufacturer: string
+  quantityCurrent: number
+  quantityMinimum: number
+  unit: string
+  storageLocation: string
+  observations: string
+  createdAt: string
+  createdBy: string
+  updatedAt: string
+  updatedBy: string
+}
+
+export interface InventoryAssetDraft {
+  clientName: string
+  siteId?: string
+  siteName?: string
+  name: string
+  category: InventoryAssetCategory
+  code: string
+  manufacturer: string
+  quantityCurrent: number
+  quantityMinimum: number
+  unit: string
+  storageLocation: string
+  observations: string
+}
+
+export type InventoryMovementType = 'Entrada' | 'Saida' | 'Ajuste'
+
+export interface InventoryMovement {
+  id: string
+  assetId: string
+  assetName: string
+  clientName: string
+  siteId?: string
+  siteName?: string
+  date: string
+  time: string
+  type: InventoryMovementType
+  quantity: number
+  unit: string
+  reason: string
+  observations: string
+  relatedEquipmentId?: string
+  relatedEquipmentName?: string
+  relatedScheduleId?: string
+  createdAt: string
+  createdBy: string
+}
+
+export interface InventoryMovementDraft {
+  date: string
+  time: string
+  type: InventoryMovementType
+  quantity: number
+  reason: string
+  observations: string
+  relatedEquipmentId?: string
+  relatedEquipmentName?: string
+}
+
+export interface ScheduleMaterialUsage {
+  id: string
+  assetId: string
+  assetName: string
+  quantity: number
+  unit: string
+  observations: string
+}
+
+export interface ScheduleMaterialUsageDraft {
+  assetId: string
+  quantity: number
+  observations: string
+}
+
 export type MaintenanceScheduleType =
   | 'Preventiva'
   | 'Corretiva'
@@ -297,7 +383,9 @@ export interface MaintenanceSchedule {
   maintenanceType: MaintenanceScheduleType
   priority: MaintenanceSchedulePriority
   observations: string
+  materialsUsed: ScheduleMaterialUsage[]
   status: MaintenanceScheduleStatus
+  materialsAppliedAt?: string
   createdAt: string
   createdBy: string
   updatedAt: string
@@ -311,6 +399,7 @@ export interface MaintenanceScheduleDraft {
   maintenanceType: MaintenanceScheduleType
   priority: MaintenanceSchedulePriority
   observations: string
+  materialsUsed: ScheduleMaterialUsageDraft[]
   status: MaintenanceScheduleStatus
 }
 
@@ -322,4 +411,36 @@ export interface AlertKanbanState {
   archived: boolean
   updatedAt: string
   updatedBy: string
+}
+
+export type RefrigerantHistoryAction = 'Adicionado' | 'Complementado' | 'Removido' | 'Recuperado' | 'Ajuste'
+
+export interface RefrigerantHistoryEntry {
+  id: string
+  equipmentId: string
+  equipmentName: string
+  clientName: string
+  siteId?: string
+  siteName?: string
+  date: string
+  time: string
+  action: RefrigerantHistoryAction
+  refrigerantType: string
+  quantity: number
+  unit: string
+  observations: string
+  createdAt: string
+  createdBy: string
+  updatedAt: string
+  updatedBy: string
+}
+
+export interface RefrigerantHistoryDraft {
+  date: string
+  time: string
+  action: RefrigerantHistoryAction
+  refrigerantType: string
+  quantity: number
+  unit: string
+  observations: string
 }
