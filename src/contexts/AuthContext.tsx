@@ -33,6 +33,16 @@ interface CreateUserData {
 const USERS_STORAGE_KEY = 'ems-platform-users'
 const SESSION_STORAGE_KEY = 'ems-platform-session'
 
+const westCorpManagerUser: User = {
+  id: 'manager-2',
+  name: 'Coordenador West Corp',
+  email: 'coordenador@condominiowestcorp.com.br',
+  role: 'manager',
+  password: 'admin123',
+  createdAt: '2026-07-06',
+  clientAccess: ['West Corp'],
+}
+
 const defaultUsers: User[] = [
   {
     id: 'admin-1',
@@ -61,6 +71,7 @@ const defaultUsers: User[] = [
     createdAt: '2026-06-29',
     clientAccess: ['Serasa Experian'],
   },
+  westCorpManagerUser,
 ]
 
 function normalizeEmail(email: string) {
@@ -75,6 +86,16 @@ function sanitizeClientAccess(clientAccess: string[]) {
   return sanitized.length > 0 ? Array.from(new Set(sanitized)) : ['Serasa Experian']
 }
 
+function ensureRequiredSeedUsers(users: User[]) {
+  const requiredUsers = [westCorpManagerUser]
+  const existingEmails = new Set(users.map((user) => normalizeEmail(user.email)))
+  const missingUsers = requiredUsers.filter(
+    (requiredUser) => !existingEmails.has(normalizeEmail(requiredUser.email))
+  )
+
+  return missingUsers.length > 0 ? [...users, ...missingUsers] : users
+}
+
 function loadUsersFromStorage() {
   if (typeof window === 'undefined') {
     return defaultUsers
@@ -87,7 +108,7 @@ function loadUsersFromStorage() {
 
   try {
     const parsedUsers = JSON.parse(storedUsers) as User[]
-    return parsedUsers.length > 0 ? parsedUsers : defaultUsers
+    return parsedUsers.length > 0 ? ensureRequiredSeedUsers(parsedUsers) : defaultUsers
   } catch {
     return defaultUsers
   }

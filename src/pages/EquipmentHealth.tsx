@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { EquipmentCard } from '@/components/equipment/EquipmentCard'
 import { EquipmentFilters } from '@/components/equipment/EquipmentFilters'
@@ -226,6 +227,12 @@ export function EquipmentHealth() {
                         {selectedWestCorpUnits.reduce((sum, unit) => sum + unit.totalAlerts, 0)} alerta(s) associado(s).
                       </p>
                     </div>
+                    <Link
+                      to={`/equipment/west-system-${selectedWestCorpSystem.id}?tab=history`}
+                      className="inline-flex items-center rounded-lg border border-primary/20 bg-primary/5 px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+                    >
+                      Abrir historico do sistema
+                    </Link>
                   </div>
 
                   <div className="mt-5">
@@ -289,6 +296,14 @@ export function EquipmentHealth() {
                         <p className="mt-3 text-sm text-gray-500">
                           Ultimo registro: {unit.lastAlertAt}
                         </p>
+                        <div className="mt-4">
+                          <Link
+                            to={`/equipment/${unit.id}?tab=history`}
+                            className="inline-flex items-center text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                          >
+                            Abrir historico da unidade
+                          </Link>
+                        </div>
                       </div>
                     ))
                   ) : (

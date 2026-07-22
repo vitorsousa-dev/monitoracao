@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Alarm } from '../../types'
 import { Clock, AlertTriangle, PhoneCall } from 'lucide-react'
 
@@ -45,14 +46,20 @@ export function RecurringAlarms({ alarms }: RecurringAlarmsProps) {
               </div>
             </div>
             <div className="mt-3 flex items-center gap-2">
-              <button className="flex items-center gap-1 px-3 py-1.5 bg-primary text-white text-sm rounded-lg hover:bg-primary/90 transition-colors">
+              <Link
+                to="/alert-management"
+                className="flex items-center gap-1 px-3 py-1.5 bg-primary text-white text-sm rounded-lg hover:bg-primary/90 transition-colors"
+              >
                 <PhoneCall className="h-4 w-4" />
                 Acao Imediata
-              </button>
-              <button className="flex items-center gap-1 px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition-colors">
+              </Link>
+              <Link
+                to={`/equipment/${encodeURIComponent(alarm.equipmentId)}?tab=scheduling`}
+                className="flex items-center gap-1 px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+              >
                 <Clock className="h-4 w-4" />
                 Agendar
-              </button>
+              </Link>
             </div>
           </div>
         ))}

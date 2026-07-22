@@ -184,3 +184,142 @@ export interface WaterData {
   target: number
   previousYear: number
 }
+
+export type EquipmentHistoryActionType =
+  | 'Inspecao'
+  | 'Manutencao Preventiva'
+  | 'Manutencao Corretiva'
+  | 'Troca de Peca'
+  | 'Falha'
+  | 'Visita Tecnica'
+  | 'Recebimento de Material'
+  | 'Instalacao'
+  | 'Atualizacao'
+  | 'Agendamento'
+  | 'Conclusao'
+  | 'Observacao'
+
+export interface EquipmentHistoryAttachment {
+  id: string
+  name: string
+  mimeType: string
+  size: number
+  dataUrl: string
+}
+
+export interface EquipmentHistoryAuditEvent {
+  id: string
+  equipmentId: string
+  entryId?: string
+  action: 'created' | 'updated' | 'deleted'
+  actorId: string | null
+  actorName: string
+  timestamp: string
+  summary: string
+}
+
+export interface EquipmentHistoryEntry {
+  id: string
+  equipmentId: string
+  equipmentName: string
+  clientName: string
+  siteId?: string
+  siteName?: string
+  date: string
+  time: string
+  responsibleUser: string
+  actionType: EquipmentHistoryActionType
+  description: string
+  observations: string
+  attachments: EquipmentHistoryAttachment[]
+  photos: EquipmentHistoryAttachment[]
+  createdAt: string
+  createdBy: string
+  updatedAt: string
+  updatedBy: string
+}
+
+export interface EquipmentHistoryEntryDraft {
+  date: string
+  time: string
+  responsibleUser: string
+  actionType: EquipmentHistoryActionType
+  description: string
+  observations: string
+  attachments: EquipmentHistoryAttachment[]
+  photos: EquipmentHistoryAttachment[]
+}
+
+export interface EquipmentHistoryTarget {
+  id: string
+  name: string
+  type: string
+  area: string
+  client: string
+  siteId?: string
+  siteName?: string
+  health: number
+  availability: number
+  comfort?: number
+  performance?: number
+  status: 'Verde' | 'Amarelo' | 'Vermelho'
+  mttr: number
+  totalOccurrences: number
+  criticalOccurrences: number
+  moderateOccurrences: number
+  informativeOccurrences: number
+  lastUpdated: string
+  source: 'equipment' | 'west-system' | 'west-unit'
+}
+
+export type MaintenanceScheduleType =
+  | 'Preventiva'
+  | 'Corretiva'
+  | 'Preditiva'
+  | 'Inspecao'
+  | 'Visita Tecnica'
+  | 'Acompanhamento'
+
+export type MaintenanceSchedulePriority = 'Baixa' | 'Media' | 'Alta' | 'Critica'
+
+export type MaintenanceScheduleStatus = 'Agendado' | 'Em andamento' | 'Finalizado' | 'Cancelado'
+
+export interface MaintenanceSchedule {
+  id: string
+  equipmentId: string
+  equipmentName: string
+  clientName: string
+  siteId?: string
+  siteName?: string
+  date: string
+  time: string
+  technician: string
+  maintenanceType: MaintenanceScheduleType
+  priority: MaintenanceSchedulePriority
+  observations: string
+  status: MaintenanceScheduleStatus
+  createdAt: string
+  createdBy: string
+  updatedAt: string
+  updatedBy: string
+}
+
+export interface MaintenanceScheduleDraft {
+  date: string
+  time: string
+  technician: string
+  maintenanceType: MaintenanceScheduleType
+  priority: MaintenanceSchedulePriority
+  observations: string
+  status: MaintenanceScheduleStatus
+}
+
+export type AlertKanbanColumn = 'pending' | 'in_progress' | 'completed'
+
+export interface AlertKanbanState {
+  equipmentId: string
+  status: AlertKanbanColumn
+  archived: boolean
+  updatedAt: string
+  updatedBy: string
+}

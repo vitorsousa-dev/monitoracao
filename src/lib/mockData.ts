@@ -62,6 +62,17 @@ export const mockUsers: User[] = [
     "clientAccess": [
       "Serasa Experian"
     ]
+  },
+  {
+    "id": "manager-2",
+    "name": "Coordenador West Corp",
+    "email": "coordenador@condominiowestcorp.com.br",
+    "role": "manager",
+    "password": "admin123",
+    "createdAt": "2026-07-06",
+    "clientAccess": [
+      "West Corp"
+    ]
   }
 ];
 

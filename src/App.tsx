@@ -7,6 +7,7 @@ import { WeeklyUpdates } from './pages/WeeklyUpdates'
 import { EquipmentDetail } from './pages/EquipmentDetail'
 import { Settings } from './pages/Settings'
 import { Alarms } from './pages/Alarms'
+import { AlertManagement } from './pages/AlertManagement'
 import { PredictiveMaintenance } from './pages/PredictiveMaintenance'
 import { Sustainability } from './pages/Sustainability'
 import { Users } from './pages/Users'
@@ -41,6 +42,7 @@ function App() {
       <Route path="/equipment" element={<EquipmentHealth />} />
       <Route path="/equipment/:id" element={<EquipmentDetail />} />
       <Route path="/alarms" element={<Alarms />} />
+      <Route path="/alert-management" element={<AlertManagement />} />
       <Route path="/predictive" element={<PredictiveMaintenance />} />
       <Route path="/sustainability" element={<Sustainability />} />
       <Route
