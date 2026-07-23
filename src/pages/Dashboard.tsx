@@ -9,13 +9,13 @@ import { SiteMap } from '@/components/dashboard/SiteMap'
 import { RecurringAlarms } from '@/components/alarms/RecurringAlarms'
 import { useScope } from '@/hooks/useScope'
 import { SERASA_SITE_ID } from '@/lib/equipmentCatalog'
+import { loadAllPredictiveTasks } from '@/lib/predictiveTaskStorage'
 import {
   mockEquipment,
   mockMonthlyEquipmentSnapshots,
   mockSites,
   mockSiteMonthlySnapshots,
-  mockAlarms,
-  mockPredictiveTasks
+  mockAlarms
 } from '@/lib/mockData'
 import { Equipment, EquipmentJustification, SiteLocation, SystemRanking } from '@/types'
 import { buildEquipmentJustification, buildFinancialHealthMetrics, getHealthStatusColor, getHealthStatusText } from '@/lib/utils'
@@ -273,6 +273,7 @@ export function Dashboard() {
     return mockSites.map((site) => (site.siteId === WEST_CORP_SITE_ID && latestWestSnapshot ? latestWestSnapshot : site))
   }, [])
   const allAlarms = useMemo(() => [...mockAlarms, ...westCorpAlarms], [])
+  const allPredictiveTasks = useMemo(() => loadAllPredictiveTasks(), [])
   const allScopedSummaries = useMemo(() => {
     const grouped = new Map<string, typeof allEquipmentSnapshots>()
 
@@ -465,8 +466,8 @@ export function Dashboard() {
       return []
     }
 
-    return mockPredictiveTasks.filter((task) => relevantEquipmentIds.has(task.equipmentId))
-  }, [aggregatedEquipment, filteredAlarms])
+    return allPredictiveTasks.filter((task) => relevantEquipmentIds.has(task.equipmentId))
+  }, [aggregatedEquipment, allPredictiveTasks, filteredAlarms])
 
   const siteSummaries = useMemo<SiteLocation[]>(() => {
     if (allCurrentSites.length === 0) {

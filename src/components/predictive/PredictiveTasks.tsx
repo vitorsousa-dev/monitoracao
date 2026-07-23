@@ -75,12 +75,22 @@ export function PredictiveTasks({ tasks }: PredictiveTasksProps) {
                     <span className={`text-xs px-2 py-0.5 rounded-full border ${getPriorityColor(task.priority)}`}>
                       {task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Media' : 'Baixa'}
                     </span>
+                    {task.origin === 'manual' && (
+                      <span className="text-xs px-2 py-0.5 rounded-full border border-primary/20 bg-primary/5 text-primary">
+                        Manual
+                      </span>
+                    )}
                     <span className="text-xs text-gray-500 flex items-center gap-1">
                       {getStatusIcon(task.status)}
                       {getStatusText(task.status)}
                     </span>
                   </div>
                   <p className="text-sm font-medium text-gray-700 mt-2">Equipamento: {task.equipmentName}</p>
+                  {(task.clientName || task.siteName) && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {[task.clientName, task.siteName].filter(Boolean).join(' • ')}
+                    </p>
+                  )}
                   <p className="text-sm text-gray-600 mt-1">{task.description}</p>
                   <div className="mt-3 rounded-lg bg-gray-50 border border-gray-200 p-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Análise Técnica</p>
@@ -115,11 +125,17 @@ export function PredictiveTasks({ tasks }: PredictiveTasksProps) {
               <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
                 <p className="text-sm font-semibold text-gray-900 mb-3">Análise Técnica Detalhada</p>
                 <div className="space-y-3">
-                  {task.detailedAnalysis.map((detail, index) => (
-                    <p key={`${task.id}-${index}`} className="text-sm text-gray-700 leading-6">
-                      {detail}
+                  {task.detailedAnalysis.length > 0 ? (
+                    task.detailedAnalysis.map((detail, index) => (
+                      <p key={`${task.id}-${index}`} className="text-sm text-gray-700 leading-6">
+                        {detail}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-600 leading-6">
+                      Nenhum detalhamento adicional registrado para esta analise.
                     </p>
-                  ))}
+                  )}
                 </div>
               </div>
             )}

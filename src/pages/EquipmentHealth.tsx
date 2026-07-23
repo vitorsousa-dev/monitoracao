@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { EquipmentCard } from '@/components/equipment/EquipmentCard'
 import { EquipmentFilters } from '@/components/equipment/EquipmentFilters'
-import { mockAlarms, mockEquipment, mockPredictiveTasks } from '@/lib/mockData'
+import { mockAlarms, mockEquipment } from '@/lib/mockData'
 import { SERASA_SITE_ID } from '@/lib/equipmentCatalog'
+import { loadAllPredictiveTasks } from '@/lib/predictiveTaskStorage'
 import { buildEquipmentJustification } from '@/lib/utils'
 import { useScope } from '@/hooks/useScope'
 import { WEST_CORP_CLIENT, WEST_CORP_SITE_ID, WEST_CORP_SITE_NAME, westCorpSystems } from '@/lib/westCorpData'
@@ -16,6 +17,7 @@ function getEquipmentSiteId(equipment: { client: string; siteId?: string }) {
 
 export function EquipmentHealth() {
   const { selectedClient, selectedSite } = useScope()
+  const predictiveTasks = useMemo(() => loadAllPredictiveTasks(), [])
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
@@ -357,7 +359,7 @@ export function EquipmentHealth() {
                 <EquipmentCard
                   key={equipment.id}
                   equipment={equipment}
-                  justification={buildEquipmentJustification(equipment, mockAlarms, mockPredictiveTasks)}
+                  justification={buildEquipmentJustification(equipment, mockAlarms, predictiveTasks)}
                 />
               ))}
               {filteredEquipment.length === 0 && (

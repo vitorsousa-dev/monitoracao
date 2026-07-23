@@ -134,6 +134,9 @@ export interface PredictiveTask {
   id: string
   equipmentId: string
   equipmentName: string
+  clientName?: string
+  siteId?: string
+  siteName?: string
   type: 'maintenance' | 'inspection' | 'replacement'
   title: string
   description: string
@@ -142,6 +145,25 @@ export interface PredictiveTask {
   priority: 'high' | 'medium' | 'low'
   dueDate: string
   status: 'pending' | 'in_progress' | 'completed'
+  riskScore: number
+  estimatedCost: number
+  origin?: 'seed' | 'manual'
+  createdAt?: string
+  createdBy?: string
+  updatedAt?: string
+  updatedBy?: string
+}
+
+export interface PredictiveTaskDraft {
+  equipmentId: string
+  type: PredictiveTask['type']
+  title: string
+  description: string
+  technicalAnalysis: string
+  detailedAnalysis: string
+  priority: PredictiveTask['priority']
+  dueDate: string
+  status: PredictiveTask['status']
   riskScore: number
   estimatedCost: number
 }
