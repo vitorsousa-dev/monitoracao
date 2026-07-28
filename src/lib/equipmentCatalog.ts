@@ -1,4 +1,6 @@
 import { mockEquipment } from '@/lib/mockData'
+import { SBA_TORRES_BRASIL_SITE_NAME } from '@/lib/sbaTorresBrasilData'
+import { sbaTorresBrasilMonthlyEquipmentSnapshots } from '@/lib/sbaTorresBrasilOperationalData'
 import { WEST_CORP_SITE_NAME } from '@/lib/westCorpData'
 import { westCorpMonthlyEquipmentSnapshots, westCorpUnitHealthRollups } from '@/lib/westCorpOperationalData'
 import { EquipmentHistoryTarget } from '@/types'
@@ -65,6 +67,36 @@ const westCorpUnits: EquipmentHistoryTarget[] = westCorpUnitHealthRollups.map((u
   source: 'west-unit',
 }))
 
+const latestSbaSystems = Array.from(
+  sbaTorresBrasilMonthlyEquipmentSnapshots.reduce<Map<string, EquipmentHistoryTarget>>((accumulator, snapshot) => {
+    const current = accumulator.get(snapshot.id)
+    if (!current || snapshot.endDate > current.lastUpdated) {
+      accumulator.set(snapshot.id, {
+        id: snapshot.id,
+        name: snapshot.name,
+        type: snapshot.type,
+        area: snapshot.area,
+        client: snapshot.client,
+        siteId: snapshot.siteId,
+        siteName: SBA_TORRES_BRASIL_SITE_NAME,
+        health: snapshot.health,
+        availability: snapshot.availability,
+        comfort: snapshot.comfort,
+        performance: snapshot.performance,
+        status: snapshot.status,
+        mttr: snapshot.mttr,
+        totalOccurrences: snapshot.totalOccurrences,
+        criticalOccurrences: snapshot.criticalOccurrences,
+        moderateOccurrences: snapshot.moderateOccurrences,
+        informativeOccurrences: snapshot.informativeOccurrences,
+        lastUpdated: snapshot.endDate,
+        source: 'sba-system',
+      })
+    }
+    return accumulator
+  }, new Map()).values()
+)
+
 const serasaEquipment: EquipmentHistoryTarget[] = mockEquipment.map((equipment) => ({
   ...equipment,
   siteId: equipment.siteId ?? (equipment.client === 'Serasa Experian' ? SERASA_SITE_ID : equipment.siteId),
@@ -79,6 +111,7 @@ export const equipmentCatalog: EquipmentHistoryTarget[] = [
   ...serasaEquipment,
   ...latestWestCorpSystems,
   ...westCorpUnits,
+  ...latestSbaSystems,
 ]
 
 export function findEquipmentCatalogItem(id: string) {

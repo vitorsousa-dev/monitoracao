@@ -15,6 +15,7 @@ import {
   SiteLocation,
   SiteMonthlySnapshot
 } from '../types';
+import { sbaTorresBrasilSite } from './sbaTorresBrasilData';
 import { westCorpSite } from './westCorpData';
 
 export const mockUser: User = {
@@ -843,7 +844,8 @@ export const mockSites: SiteLocation[] = [
     "ocorrenciasCriticas": 3,
     "ultimaAtualizacao": "30/06/2026"
   },
-  westCorpSite
+  westCorpSite,
+  sbaTorresBrasilSite
 ];
 
 export const mockSiteMonthlySnapshots: SiteMonthlySnapshot[] = [

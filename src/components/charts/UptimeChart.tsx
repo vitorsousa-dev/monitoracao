@@ -31,7 +31,7 @@ export function UptimeChart({ data }: UptimeChartProps) {
           <Area
             type="monotone"
             dataKey="availability"
-            name="Disponibilidade"
+            name="Disponibilidade Operacional"
             stroke="#0F6CBD"
             strokeWidth={2}
             fillOpacity={1}

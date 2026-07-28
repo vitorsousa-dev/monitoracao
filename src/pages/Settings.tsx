@@ -21,7 +21,7 @@ export function Settings() {
 
   const notificationItems = [
     {
-      title: 'Ocorrencias criticas',
+      title: 'Eventos Criticos',
       description: 'Prioriza alarmes de alta severidade vinculados aos equipamentos do seu escopo.',
     },
     {

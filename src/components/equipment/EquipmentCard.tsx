@@ -52,21 +52,21 @@ export function EquipmentCard({ equipment, justification }: EquipmentCardProps) 
               <CheckCircle className="h-4 w-4" />
             </div>
             <p className="text-lg font-bold text-gray-900">{equipment.availability}%</p>
-            <p className="text-xs text-gray-500">Disp.</p>
+            <p className="text-[11px] leading-4 text-gray-500">Disponibilidade Operacional</p>
           </div>
           <div className="text-center">
             <div className="flex items-center justify-center text-warning mb-1">
               <Clock className="h-4 w-4" />
             </div>
             <p className="text-lg font-bold text-gray-900">{equipment.mttr.toFixed(1)}h</p>
-            <p className="text-xs text-gray-500">MTTR</p>
+            <p className="text-[11px] leading-4 text-gray-500">MTTR (Médio)</p>
           </div>
           <div className="text-center">
             <div className="flex items-center justify-center text-danger mb-1">
               <AlertTriangle className="h-4 w-4" />
             </div>
             <p className="text-lg font-bold text-gray-900">{equipment.totalOccurrences}</p>
-            <p className="text-xs text-gray-500">Ocorrências</p>
+            <p className="text-[11px] leading-4 text-gray-500">Eventos Críticos</p>
           </div>
         </div>
 

@@ -11,6 +11,7 @@ import {
 } from '@/types'
 
 const STORAGE_KEY = 'ems-maintenance-workflow-store'
+export const MAINTENANCE_WORKFLOW_UPDATED_EVENT = 'ems-maintenance-workflow-updated'
 
 type MaintenanceWorkflowStore = {
   schedulesByEquipment: Record<string, MaintenanceSchedule[]>
@@ -53,6 +54,7 @@ function saveStore(store: MaintenanceWorkflowStore) {
   }
 
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store))
+  window.dispatchEvent(new CustomEvent(MAINTENANCE_WORKFLOW_UPDATED_EVENT))
 }
 
 function toKanbanColumn(status: MaintenanceScheduleStatus): AlertKanbanColumn {

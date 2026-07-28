@@ -101,7 +101,7 @@ export function SiteMap({ sites, periodLabel }: SiteMapProps) {
                   <Tooltip direction="top" offset={[0, -12]} opacity={1} permanent={false}>
                     <div className="space-y-1">
                       <p className="text-sm font-semibold text-gray-900">{site.nome}</p>
-                      <p className="text-xs text-gray-600">Saúde Geral: {formatMetric(site.saudeGeral)}</p>
+                      <p className="text-xs text-gray-600">Índice de Saúde dos Ativos: {formatMetric(site.saudeGeral)}</p>
                     </div>
                   </Tooltip>
 
@@ -121,13 +121,13 @@ export function SiteMap({ sites, periodLabel }: SiteMapProps) {
 
                       <div className="grid grid-cols-2 gap-2">
                         <div className="rounded-lg border border-gray-100 p-3">
-                          <p className="text-xs text-gray-500">Saúde Geral</p>
+                          <p className="text-xs text-gray-500">Índice de Saúde dos Ativos</p>
                           <p className="mt-1 text-sm font-semibold" style={{ color }}>
                             {formatMetric(site.saudeGeral)}
                           </p>
                         </div>
                         <div className="rounded-lg border border-gray-100 p-3">
-                          <p className="text-xs text-gray-500">Disponibilidade</p>
+                          <p className="text-xs text-gray-500">Disponibilidade Operacional</p>
                           <p className="mt-1 text-sm font-semibold text-gray-900">{formatMetric(site.disponibilidade)}</p>
                         </div>
                         <div className="rounded-lg border border-gray-100 p-3">
@@ -142,7 +142,7 @@ export function SiteMap({ sites, periodLabel }: SiteMapProps) {
 
                       <div className="flex items-center justify-between rounded-lg border border-gray-100 p-3">
                         <div>
-                          <p className="text-xs text-gray-500">Ocorrências críticas</p>
+                          <p className="text-xs text-gray-500">Eventos Críticos</p>
                           <p className="mt-1 text-sm font-semibold text-gray-900">{site.ocorrenciasCriticas}</p>
                         </div>
                         <div className="text-right">
@@ -183,10 +183,10 @@ export function SiteMap({ sites, periodLabel }: SiteMapProps) {
               <p className="mt-3 text-sm leading-6 text-gray-600">{site.endereco}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
-                  Disponibilidade {formatMetric(site.disponibilidade)}
+                  Disponibilidade Operacional {formatMetric(site.disponibilidade)}
                 </span>
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
-                  Críticos {site.ocorrenciasCriticas}
+                  Eventos Críticos {site.ocorrenciasCriticas}
                 </span>
               </div>
             </div>

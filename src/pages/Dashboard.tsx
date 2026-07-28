@@ -8,17 +8,24 @@ import { RankingView } from '@/components/dashboard/RankingView'
 import { SiteMap } from '@/components/dashboard/SiteMap'
 import { RecurringAlarms } from '@/components/alarms/RecurringAlarms'
 import { useScope } from '@/hooks/useScope'
-import { SERASA_SITE_ID } from '@/lib/equipmentCatalog'
+import { equipmentCatalog } from '@/lib/equipmentCatalog'
+import { loadKanbanStates, MAINTENANCE_WORKFLOW_UPDATED_EVENT } from '@/lib/maintenanceWorkflowStorage'
 import { loadAllPredictiveTasks } from '@/lib/predictiveTaskStorage'
 import {
-  mockEquipment,
   mockMonthlyEquipmentSnapshots,
   mockSites,
   mockSiteMonthlySnapshots,
   mockAlarms
 } from '@/lib/mockData'
-import { Equipment, EquipmentJustification, SiteLocation, SystemRanking } from '@/types'
+import { Alarm, Equipment, EquipmentJustification, SiteLocation, SystemRanking } from '@/types'
 import { buildEquipmentJustification, buildFinancialHealthMetrics, getHealthStatusColor, getHealthStatusText } from '@/lib/utils'
+import {
+  sbaTorresBrasilAlarms,
+  sbaTorresBrasilMonthlyEquipmentSnapshots,
+  sbaTorresBrasilMonthlySummaries,
+  sbaTorresBrasilSiteMonthlySnapshots,
+} from '@/lib/sbaTorresBrasilOperationalData'
+import { SBA_TORRES_BRASIL_SITE_ID } from '@/lib/sbaTorresBrasilData'
 import { westCorpAlarms, westCorpMonthlyEquipmentSnapshots, westCorpMonthlySummaries, westCorpSiteMonthlySnapshots } from '@/lib/westCorpOperationalData'
 import { WEST_CORP_SITE_ID } from '@/lib/westCorpData'
 import { TrendingUp, TrendingDown, Activity, AlertTriangle, Minus, Printer } from 'lucide-react'
@@ -244,12 +251,112 @@ function getStatusPalette(status: Equipment['status']) {
   }
 }
 
-function getEquipmentSiteId(equipment: { client: string; siteId?: string }) {
-  return equipment.siteId ?? (equipment.client === 'Serasa Experian' ? SERASA_SITE_ID : undefined)
+function getExecutiveHealthLabel(health: number) {
+  if (health >= 90) {
+    return { stars: '★★★★★', label: 'Excelente' }
+  }
+
+  if (health >= 80) {
+    return { stars: '★★★★☆', label: 'Bom' }
+  }
+
+  if (health >= 70) {
+    return { stars: '★★★☆☆', label: 'Atencao' }
+  }
+
+  return { stars: '★★☆☆☆', label: 'Critico' }
+}
+
+function getEquipmentCurrentStatusLabel(status: Equipment['status']) {
+  if (status === 'Verde') {
+    return 'Operando'
+  }
+
+  if (status === 'Amarelo') {
+    return 'Atencao'
+  }
+
+  return 'Critico'
+}
+
+function getCenteredTextX(text: string, centerX: number, size = 10) {
+  return Number((centerX - text.length * size * 0.26).toFixed(2))
+}
+
+function isSiteScoped(
+  site: Pick<SiteLocation, 'cliente' | 'siteId'>,
+  selectedClient: string,
+  selectedSite: string
+) {
+  const matchesClient = selectedClient === 'all-clients' || site.cliente === selectedClient
+  const matchesSite = selectedSite === 'all-sites' || site.siteId === selectedSite
+  return matchesClient && matchesSite
+}
+
+function isPredictiveTaskScoped(
+  task: {
+    equipmentId: string
+    clientName?: string
+    siteId?: string
+  },
+  relevantEquipmentIds: Set<string>,
+  selectedClient: string,
+  selectedSite: string
+) {
+  if (!relevantEquipmentIds.has(task.equipmentId)) {
+    return false
+  }
+
+  const matchesClient = selectedClient === 'all-clients' || !task.clientName || task.clientName === selectedClient
+  const matchesSite = selectedSite === 'all-sites' || !task.siteId || task.siteId === selectedSite
+
+  return matchesClient && matchesSite
+}
+
+function normalizeCatalogEquipment(equipment: (typeof equipmentCatalog)[number]): Equipment {
+  return {
+    ...equipment,
+    type:
+      equipment.type === 'Split' || equipment.type === 'Cassete' || equipment.type === 'Chiller'
+        ? equipment.type
+        : 'VRV',
+    comfort: equipment.comfort ?? equipment.health,
+    performance: equipment.performance ?? equipment.availability,
+  }
+}
+
+function isEquipmentCompletedInKanban(equipmentId: string, kanbanStates: ReturnType<typeof loadKanbanStates>) {
+  const state = kanbanStates[equipmentId]
+  return state?.status === 'completed' || state?.archived === true
+}
+
+function applyKanbanAlarmState(alarm: Alarm, kanbanStates: ReturnType<typeof loadKanbanStates>): Alarm {
+  const state = kanbanStates[alarm.equipmentId]
+
+  if (!state) {
+    return alarm
+  }
+
+  if (state.status === 'completed' || state.archived) {
+    return {
+      ...alarm,
+      status: 'resolved' as Alarm['status'],
+    }
+  }
+
+  if (state.status === 'in_progress' && alarm.status !== 'resolved') {
+    return {
+      ...alarm,
+      status: 'acknowledged' as Alarm['status'],
+    }
+  }
+
+  return alarm
 }
 
 export function Dashboard() {
   const { selectedClient, selectedSite, availableClients, availableSites } = useScope()
+  const [workflowVersion, setWorkflowVersion] = useState(0)
   const allEquipmentSnapshots = useMemo(
     () => [
       ...mockMonthlyEquipmentSnapshots.map((snapshot) => ({
@@ -257,22 +364,38 @@ export function Dashboard() {
         siteId: snapshot.siteId ?? 'serasa-pdc',
       })),
       ...westCorpMonthlyEquipmentSnapshots,
+      ...sbaTorresBrasilMonthlyEquipmentSnapshots,
     ],
     []
   )
   const allSiteSnapshots = useMemo(
     () => [
-      ...mockSiteMonthlySnapshots.filter((snapshot) => snapshot.siteId !== WEST_CORP_SITE_ID),
+      ...mockSiteMonthlySnapshots.filter(
+        (snapshot) => snapshot.siteId !== WEST_CORP_SITE_ID && snapshot.siteId !== SBA_TORRES_BRASIL_SITE_ID
+      ),
       ...westCorpSiteMonthlySnapshots,
+      ...sbaTorresBrasilSiteMonthlySnapshots,
     ],
     []
   )
   const allCurrentSites = useMemo(() => {
     const sortedWestSnapshots = [...westCorpSiteMonthlySnapshots].sort((a, b) => a.monthKey.localeCompare(b.monthKey))
     const latestWestSnapshot = sortedWestSnapshots[sortedWestSnapshots.length - 1]
-    return mockSites.map((site) => (site.siteId === WEST_CORP_SITE_ID && latestWestSnapshot ? latestWestSnapshot : site))
+    const sortedSbaSnapshots = [...sbaTorresBrasilSiteMonthlySnapshots].sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+    const latestSbaSnapshot = sortedSbaSnapshots[sortedSbaSnapshots.length - 1]
+    return mockSites.map((site) => {
+      if (site.siteId === WEST_CORP_SITE_ID && latestWestSnapshot) {
+        return latestWestSnapshot
+      }
+
+      if (site.siteId === SBA_TORRES_BRASIL_SITE_ID && latestSbaSnapshot) {
+        return latestSbaSnapshot
+      }
+
+      return site
+    })
   }, [])
-  const allAlarms = useMemo(() => [...mockAlarms, ...westCorpAlarms], [])
+  const allAlarms = useMemo(() => [...mockAlarms, ...westCorpAlarms, ...sbaTorresBrasilAlarms], [])
   const allPredictiveTasks = useMemo(() => loadAllPredictiveTasks(), [])
   const allScopedSummaries = useMemo(() => {
     const grouped = new Map<string, typeof allEquipmentSnapshots>()
@@ -296,7 +419,11 @@ export function Dashboard() {
         const sortedSnapshots = [...snapshots].sort((a, b) => a.startDate.localeCompare(b.startDate))
         return {
           monthKey,
-          month: sortedSnapshots[0]?.month ?? westCorpMonthlySummaries.find((summary) => summary.monthKey === monthKey)?.month ?? monthKey,
+          month:
+            sortedSnapshots[0]?.month ??
+            westCorpMonthlySummaries.find((summary) => summary.monthKey === monthKey)?.month ??
+            sbaTorresBrasilMonthlySummaries.find((summary) => summary.monthKey === monthKey)?.month ??
+            monthKey,
           startDate: sortedSnapshots[0]?.startDate ?? `${monthKey}-01`,
           endDate: sortedSnapshots[sortedSnapshots.length - 1]?.endDate ?? `${monthKey}-30`,
           health: Number((sortedSnapshots.reduce((sum, item) => sum + item.health, 0) / count).toFixed(2)),
@@ -314,6 +441,7 @@ export function Dashboard() {
   const [endMonth, setEndMonth] = useState(availableMonths[availableMonths.length - 1]?.monthKey ?? '')
   const [showMttrDetails, setShowMttrDetails] = useState(false)
   const [showFinancialDetails, setShowFinancialDetails] = useState(false)
+  const kanbanStates = useMemo(() => loadKanbanStates(), [workflowVersion])
 
   useEffect(() => {
     if (availableMonths.length === 0) {
@@ -328,6 +456,26 @@ export function Dashboard() {
     setStartMonth((current) => (availableMonths.some((summary) => summary.monthKey === current) ? current : firstMonth))
     setEndMonth((current) => (availableMonths.some((summary) => summary.monthKey === current) ? current : lastMonth))
   }, [availableMonths])
+
+  useEffect(() => {
+    const handleWorkflowChange = () => {
+      setWorkflowVersion((current) => current + 1)
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'ems-maintenance-workflow-store') {
+        handleWorkflowChange()
+      }
+    }
+
+    window.addEventListener(MAINTENANCE_WORKFLOW_UPDATED_EVENT, handleWorkflowChange)
+    window.addEventListener('storage', handleStorage)
+
+    return () => {
+      window.removeEventListener(MAINTENANCE_WORKFLOW_UPDATED_EVENT, handleWorkflowChange)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [])
 
   const selectedSummaries = useMemo(() => {
     if (!startMonth || !endMonth) {
@@ -456,6 +604,38 @@ export function Dashboard() {
     })
   }, [allAlarms, selectedClient, selectedSite, selectedSnapshots, selectedSummaries])
 
+  const dashboardAlarms = useMemo(
+    () => filteredAlarms.map((alarm) => applyKanbanAlarmState(alarm, kanbanStates)),
+    [filteredAlarms, kanbanStates]
+  )
+
+  const dashboardAggregatedEquipment = useMemo(
+    () => aggregatedEquipment.filter((equipment) => !isEquipmentCompletedInKanban(equipment.id, kanbanStates)),
+    [aggregatedEquipment, kanbanStates]
+  )
+
+  const dashboardSnapshotFallback = useMemo(
+    () =>
+      selectedSnapshots
+        .filter((snapshot) => !isEquipmentCompletedInKanban(snapshot.id, kanbanStates))
+        .map((snapshot) => ({
+          ...snapshot,
+          comfort: snapshot.comfort ?? snapshot.health,
+          performance: snapshot.performance ?? snapshot.availability,
+        }))
+        .sort((a, b) => b.totalOccurrences - a.totalOccurrences || a.health - b.health),
+    [kanbanStates, selectedSnapshots]
+  )
+
+  const dashboardMetricsView = useMemo(
+    () => ({
+      ...dashboardMetrics,
+      totalOccurrences: dashboardAggregatedEquipment.reduce((sum, item) => sum + item.totalOccurrences, 0),
+      affectedEquipment: dashboardAggregatedEquipment.length,
+    }),
+    [dashboardAggregatedEquipment, dashboardMetrics]
+  )
+
   const filteredPredictiveTasks = useMemo(() => {
     const relevantEquipmentIds = new Set([
       ...aggregatedEquipment.map((equipment) => equipment.id),
@@ -466,8 +646,25 @@ export function Dashboard() {
       return []
     }
 
-    return allPredictiveTasks.filter((task) => relevantEquipmentIds.has(task.equipmentId))
-  }, [aggregatedEquipment, allPredictiveTasks, filteredAlarms])
+    return allPredictiveTasks.filter((task) =>
+      isPredictiveTaskScoped(task, relevantEquipmentIds, selectedClient, selectedSite)
+    )
+  }, [aggregatedEquipment, allPredictiveTasks, filteredAlarms, selectedClient, selectedSite])
+
+  const dashboardPredictiveTasks = useMemo(() => {
+    const relevantEquipmentIds = new Set([
+      ...dashboardAggregatedEquipment.map((equipment) => equipment.id),
+      ...dashboardAlarms.map((alarm) => alarm.equipmentId),
+    ])
+
+    if (relevantEquipmentIds.size === 0) {
+      return []
+    }
+
+    return allPredictiveTasks.filter((task) =>
+      isPredictiveTaskScoped(task, relevantEquipmentIds, selectedClient, selectedSite)
+    )
+  }, [allPredictiveTasks, dashboardAggregatedEquipment, dashboardAlarms, selectedClient, selectedSite])
 
   const siteSummaries = useMemo<SiteLocation[]>(() => {
     if (allCurrentSites.length === 0) {
@@ -475,11 +672,7 @@ export function Dashboard() {
     }
 
     if (selectedSummaries.length === 0) {
-      return allCurrentSites.filter((site) => {
-        const matchesClient = selectedClient === 'all-clients' || site.cliente === selectedClient
-        const matchesSite = selectedSite === 'all-sites' || site.siteId === selectedSite
-        return matchesClient && matchesSite
-      })
+      return allCurrentSites.filter((site) => isSiteScoped(site, selectedClient, selectedSite))
     }
 
     const monthKeys = new Set(selectedSummaries.map((summary) => summary.monthKey))
@@ -491,7 +684,7 @@ export function Dashboard() {
     })
 
     if (scopedSiteSnapshots.length === 0) {
-      return allCurrentSites
+      return allCurrentSites.filter((site) => isSiteScoped(site, selectedClient, selectedSite))
     }
 
     const groupedSites = new Map<string, SiteLocation & { _count: number }>()
@@ -529,37 +722,44 @@ export function Dashboard() {
 
   const visibleSiteSummaries = siteSummaries
 
-  const highlightedEquipment = useMemo(
-    () =>
-      (
-        aggregatedEquipment.length > 0
-          ? aggregatedEquipment
-          : mockEquipment.filter((equipment) => {
-              const matchesClient = selectedClient === 'all-clients' || equipment.client === selectedClient
-              const matchesSite = selectedSite === 'all-sites' || getEquipmentSiteId(equipment) === selectedSite
-              return matchesClient && matchesSite
-            })
-      ).slice(0, 3),
-    [aggregatedEquipment, selectedClient, selectedSite]
-  )
+  const highlightedEquipment = useMemo(() => {
+    if (dashboardAggregatedEquipment.length > 0) {
+      return dashboardAggregatedEquipment.slice(0, 3)
+    }
+
+    if (dashboardSnapshotFallback.length > 0) {
+      return dashboardSnapshotFallback.slice(0, 3)
+    }
+
+    return equipmentCatalog
+      .filter((equipment) => {
+        const matchesClient = selectedClient === 'all-clients' || equipment.client === selectedClient
+        const matchesSite = selectedSite === 'all-sites' || equipment.siteId === selectedSite
+        return matchesClient && matchesSite
+      })
+      .map(normalizeCatalogEquipment)
+      .filter((equipment) => !isEquipmentCompletedInKanban(equipment.id, kanbanStates))
+      .sort((a, b) => b.totalOccurrences - a.totalOccurrences || a.health - b.health)
+      .slice(0, 3)
+  }, [dashboardAggregatedEquipment, dashboardSnapshotFallback, kanbanStates, selectedClient, selectedSite])
 
   const equipmentJustifications = useMemo(() => {
     const entries: Array<[string, EquipmentJustification]> = highlightedEquipment.map((equipment) => [
       equipment.id,
-      buildEquipmentJustification(equipment, filteredAlarms, filteredPredictiveTasks),
+      buildEquipmentJustification(equipment, dashboardAlarms, dashboardPredictiveTasks),
     ])
 
     return new Map<string, EquipmentJustification>(entries)
-  }, [filteredAlarms, filteredPredictiveTasks, highlightedEquipment])
+  }, [dashboardAlarms, dashboardPredictiveTasks, highlightedEquipment])
 
   const financialMetrics = useMemo(
     () => buildFinancialHealthMetrics(
-      filteredAlarms,
-      filteredPredictiveTasks,
-      dashboardMetrics.averageHealth,
-      dashboardMetrics.averageAvailability
+      dashboardAlarms,
+      dashboardPredictiveTasks,
+      dashboardMetricsView.averageHealth,
+      dashboardMetricsView.averageAvailability
     ),
-    [dashboardMetrics.averageAvailability, dashboardMetrics.averageHealth, filteredAlarms, filteredPredictiveTasks]
+    [dashboardAlarms, dashboardMetricsView.averageAvailability, dashboardMetricsView.averageHealth, dashboardPredictiveTasks]
   )
 
   const currentSummary = selectedSummaries[selectedSummaries.length - 1]
@@ -588,6 +788,8 @@ export function Dashboard() {
       : selectedClient === 'all-clients'
         ? 'Escopo: visão consolidada de todos os clientes e sites'
         : `Cliente: ${selectedClientLabel} | Site: todos os sites`
+  const reportHeaderClientLine = `Cliente: ${selectedClientLabel}`
+  const reportHeaderSiteLine = `Site: ${selectedSiteLabel}`
   const reportGeneratedLabel = new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'short',
     timeStyle: 'short',
@@ -644,71 +846,128 @@ export function Dashboard() {
     }
 
     pageOne.push(
-      { kind: 'rect', x: 0, y: 682, width: 612, height: 110, fillColor: [80, 32, 68] },
-      { kind: 'rect', x: 0, y: 665, width: 612, height: 18, fillColor: [166, 48, 86] },
-      { kind: 'text', text: 'EMS | Relatorio Gerencial', x: 44, y: 742, size: 22, color: [255, 255, 255], bold: true },
-      { kind: 'text', text: `Relatorio executivo automatico - ${reportScopeTitle}`, x: 44, y: 718, size: 12, color: [243, 244, 246] },
-      { kind: 'text', text: `Periodo analisado: ${selectedPeriodLabel}`, x: 390, y: 742, size: 11, color: [255, 255, 255], bold: true },
-      { kind: 'text', text: reportScopeDescription, x: 44, y: 698, size: 10, color: [229, 231, 235] },
-      { kind: 'text', text: `Gerado em ${reportGeneratedLabel}`, x: 390, y: 720, size: 10, color: [229, 231, 235] }
+      { kind: 'rect', x: 0, y: 652, width: 612, height: 140, fillColor: [80, 32, 68] },
+      { kind: 'rect', x: 44, y: 688, width: 92, height: 72, fillColor: [104, 46, 89], strokeColor: [255, 255, 255], lineWidth: 1 },
+      { kind: 'rect', x: 155, y: 670, width: 1, height: 88, fillColor: [166, 111, 149] },
+      { kind: 'text', text: 'EMS', x: 70, y: 728, size: 22, color: [255, 255, 255], bold: true },
+      { kind: 'text', text: 'HVAC', x: 67, y: 706, size: 14, color: [243, 244, 246], bold: true },
+      { kind: 'text', text: 'RELATORIO EXECUTIVO DE SAUDE E PERFORMANCE DOS ATIVOS HVAC', x: 172, y: 748, size: 12, color: [255, 255, 255], bold: true },
+      { kind: 'text', text: 'Proactive Monitoring Service | Powered by CoolAutomation Professional App', x: 172, y: 722, size: 9, color: [243, 244, 246] },
+      { kind: 'text', text: 'E-mail: proactive.service.latam@coolautomation.com', x: 172, y: 698, size: 9, color: [243, 244, 246] },
+      { kind: 'text', text: `Periodo analisado: ${selectedPeriodLabel}`, x: 412, y: 676, size: 9, color: [255, 255, 255], bold: true },
+      { kind: 'text', text: `Gerado em ${reportGeneratedLabel}`, x: 412, y: 658, size: 9, color: [229, 231, 235] }
     )
 
-      const kpiCards = [
-        { label: 'Saude Geral', value: `${dashboardMetrics.averageHealth}%`, note: 'Equipamentos com ocorrencias', x: 44, y: 560 },
-        { label: 'Disponibilidade', value: `${dashboardMetrics.averageAvailability}%`, note: 'Media operacional do periodo', x: 314, y: 560 },
-        { label: 'MTTR', value: `${dashboardMetrics.mttr}h`, note: 'Tempo medio de resolucao', x: 44, y: 455 },
-        { label: 'Ocorrencias', value: `${dashboardMetrics.totalOccurrences}`, note: `${dashboardMetrics.affectedEquipment} equipamentos impactados`, x: 314, y: 455 },
-      ]
+    addWrappedText(pageOne, reportHeaderClientLine, 172, 676, {
+      size: 9,
+      color: [229, 231, 235],
+      maxLength: 34,
+      lineGap: 2,
+    })
+    addWrappedText(pageOne, reportHeaderSiteLine, 172, 662, {
+      size: 9,
+      color: [229, 231, 235],
+      maxLength: 34,
+      lineGap: 2,
+    })
 
-      kpiCards.forEach((card) => {
-        pageOne.push(
-          { kind: 'rect', x: card.x, y: card.y, width: 254, height: 86, fillColor: [255, 255, 255], strokeColor: [226, 232, 240], lineWidth: 1 },
-          { kind: 'rect', x: card.x, y: card.y + 72, width: 254, height: 14, fillColor: [248, 250, 252] },
-          { kind: 'text', text: card.label, x: card.x + 16, y: card.y + 56, size: 10, color: [100, 116, 139], bold: true },
-          { kind: 'text', text: card.value, x: card.x + 16, y: card.y + 28, size: 24, color: [15, 23, 42], bold: true },
-          { kind: 'text', text: card.note, x: card.x + 16, y: card.y + 12, size: 9, color: [100, 116, 139] }
-        )
-      })
+      const executiveHealth = getExecutiveHealthLabel(dashboardMetrics.averageHealth)
 
       pageOne.push(
-        { kind: 'text', text: `Ranking de Alarmes - ${reportScopeTitle}`, x: 44, y: 408, size: 16, color: [15, 23, 42], bold: true },
-        { kind: 'rect', x: 44, y: 150, width: 524, height: 236, fillColor: [255, 255, 255], strokeColor: [226, 232, 240], lineWidth: 1 },
-        { kind: 'rect', x: 44, y: 354, width: 524, height: 32, fillColor: [248, 250, 252] }
+        { kind: 'rect', x: 44, y: 530, width: 254, height: 100, fillColor: [255, 255, 255], strokeColor: [226, 232, 240], lineWidth: 1 },
+        { kind: 'rect', x: 44, y: 610, width: 254, height: 20, fillColor: [248, 250, 252] },
+        { kind: 'rect', x: 220, y: 548, width: 62, height: 56, fillColor: [249, 250, 251] },
+        { kind: 'text', text: 'Indice de Saude dos Ativos', x: getCenteredTextX('Indice de Saude dos Ativos', 133, 10), y: 588, size: 10, color: [100, 116, 139], bold: true },
+        { kind: 'text', text: `${dashboardMetrics.averageHealth}%`, x: getCenteredTextX(`${dashboardMetrics.averageHealth}%`, 133, 24), y: 552, size: 24, color: [15, 23, 42], bold: true },
+        { kind: 'text', text: 'Equipamentos com ocorrencias', x: getCenteredTextX('Equipamentos com ocorrencias', 133, 9), y: 528, size: 9, color: [100, 116, 139] },
+        { kind: 'text', text: executiveHealth.stars, x: getCenteredTextX(executiveHealth.stars, 251, 9), y: 584, size: 9, color: [15, 23, 42], bold: true },
+        { kind: 'text', text: executiveHealth.label, x: getCenteredTextX(executiveHealth.label, 251, 9), y: 566, size: 9, color: [15, 23, 42], bold: true },
+
+        { kind: 'rect', x: 314, y: 530, width: 254, height: 100, fillColor: [255, 255, 255], strokeColor: [226, 232, 240], lineWidth: 1 },
+        { kind: 'rect', x: 314, y: 610, width: 254, height: 20, fillColor: [248, 250, 252] },
+        { kind: 'rect', x: 486, y: 548, width: 62, height: 56, fillColor: [249, 250, 251] },
+        { kind: 'text', text: 'Disponibilidade Operacional', x: getCenteredTextX('Disponibilidade Operacional', 403, 10), y: 588, size: 10, color: [100, 116, 139], bold: true },
+        { kind: 'text', text: `${dashboardMetrics.averageAvailability}%`, x: getCenteredTextX(`${dashboardMetrics.averageAvailability}%`, 403, 24), y: 552, size: 24, color: [15, 23, 42], bold: true },
+        { kind: 'text', text: 'Media operacional do periodo', x: getCenteredTextX('Media operacional do periodo', 403, 9), y: 528, size: 9, color: [100, 116, 139] },
+        { kind: 'text', text: availabilityDelta >= 0 ? `▲ +${availabilityDelta}%` : `▼ ${availabilityDelta}%`, x: getCenteredTextX(availabilityDelta >= 0 ? `▲ +${availabilityDelta}%` : `▼ ${availabilityDelta}%`, 517, 7), y: 584, size: 7, color: availabilityDelta >= 0 ? [21, 128, 61] : [185, 28, 28], bold: true },
+        { kind: 'text', text: 'Variacao', x: getCenteredTextX('Variacao', 517, 7), y: 566, size: 7, color: [100, 116, 139] },
+
+        { kind: 'rect', x: 44, y: 420, width: 254, height: 92, fillColor: [255, 255, 255], strokeColor: [226, 232, 240], lineWidth: 1 },
+        { kind: 'rect', x: 44, y: 494, width: 254, height: 18, fillColor: [248, 250, 252] },
+        { kind: 'text', text: 'MTTR (Medio)', x: getCenteredTextX('MTTR (Medio)', 171, 10), y: 470, size: 10, color: [100, 116, 139], bold: true },
+        { kind: 'text', text: `${dashboardMetrics.mttr}h`, x: getCenteredTextX(`${dashboardMetrics.mttr}h`, 171, 24), y: 438, size: 24, color: [15, 23, 42], bold: true },
+        { kind: 'text', text: 'Tempo medio de resolucao', x: getCenteredTextX('Tempo medio de resolucao', 171, 9), y: 418, size: 9, color: [100, 116, 139] },
+
+        { kind: 'rect', x: 314, y: 420, width: 254, height: 92, fillColor: [255, 255, 255], strokeColor: [226, 232, 240], lineWidth: 1 },
+        { kind: 'rect', x: 314, y: 494, width: 254, height: 18, fillColor: [248, 250, 252] },
+        { kind: 'text', text: 'Eventos Criticos', x: getCenteredTextX('Eventos Criticos', 441, 10), y: 470, size: 10, color: [100, 116, 139], bold: true },
+        { kind: 'text', text: `${dashboardMetrics.totalOccurrences}`, x: getCenteredTextX(`${dashboardMetrics.totalOccurrences}`, 441, 24), y: 438, size: 24, color: [15, 23, 42], bold: true },
+        { kind: 'text', text: `${dashboardMetrics.affectedEquipment} equipamentos impactados`, x: getCenteredTextX(`${dashboardMetrics.affectedEquipment} equipamentos impactados`, 441, 9), y: 418, size: 9, color: [100, 116, 139] }
+      )
+
+      pageOne.push(
+        { kind: 'text', text: 'Equipamentos com Maior Criticidade:', x: 44, y: 388, size: 18, color: [15, 23, 42], bold: true },
+        { kind: 'rect', x: 44, y: 145, width: 524, height: 220, fillColor: [255, 255, 255], strokeColor: [226, 232, 240], lineWidth: 1 },
+        { kind: 'rect', x: 44, y: 333, width: 524, height: 32, fillColor: [248, 250, 252] },
+        { kind: 'rect', x: 496, y: 333, width: 62, height: 32, fillColor: [242, 244, 247], strokeColor: [226, 232, 240], lineWidth: 1 }
       )
 
       const tableHeaders = [
-        { text: 'Pos.', x: 58 },
-        { text: 'Equipamento', x: 100 },
-        { text: 'Alarmes', x: 340 },
-        { text: 'Criticos', x: 420 },
-        { text: 'Saude', x: 500 },
+        { text: 'Pos.', x: getCenteredTextX('Pos.', 62, 9) },
+        { text: 'Equipamento', x: 92 },
+        { text: 'Alarmes', x: getCenteredTextX('Alarmes', 262, 9) },
+        { text: 'Criticos', x: getCenteredTextX('Criticos', 314, 9) },
+        { text: 'Saude', x: getCenteredTextX('Saude', 371, 9) },
+        { text: 'Disponibilidade', x: getCenteredTextX('Disponibilidade', 440, 9) },
+        { text: 'Status Atual', x: getCenteredTextX('Status Atual', 527, 8), size: 8 },
       ]
 
       tableHeaders.forEach((header) => {
-        pageOne.push({ kind: 'text', text: header.text, x: header.x, y: 366, size: 10, color: [71, 85, 105], bold: true })
+        pageOne.push({
+          kind: 'text',
+          text: header.text,
+          x: header.x,
+          y: 'y' in header && typeof header.y === 'number' ? header.y : 344,
+          size: 'size' in header && typeof header.size === 'number' ? header.size : 9,
+          color: [71, 85, 105],
+          bold: true,
+        })
       })
 
-      rankingData.slice(0, 5).forEach((item, index) => {
-        const rowY = 330 - index * 36
+      rankingData.slice(0, 4).forEach((item, index) => {
+        const rowY = 300 - index * 42
+        const equipmentStatus = getHealthStatusText(item.healthScore) as Equipment['status']
+        const statusPalette = getStatusPalette(equipmentStatus)
+        const currentStatusLabel = getEquipmentCurrentStatusLabel(equipmentStatus)
         pageOne.push({ kind: 'rect', x: 44, y: rowY - 10, width: 524, height: 1, fillColor: [241, 245, 249] })
-        pageOne.push({ kind: 'text', text: String(item.rank), x: 62, y: rowY + 8, size: 10, color: [15, 23, 42], bold: true })
-        addWrappedText(pageOne, item.equipmentName ?? item.systemName, 100, rowY + 8, { size: 10, color: [15, 23, 42], bold: index === 0, maxLength: 28, lineGap: 2 })
+        pageOne.push({ kind: 'text', text: String(item.rank), x: getCenteredTextX(String(item.rank), 62, 10), y: rowY + 8, size: 10, color: [15, 23, 42], bold: true })
+        addWrappedText(pageOne, item.equipmentName ?? item.systemName, 92, rowY + 8, {
+          size: 9,
+          color: [15, 23, 42],
+          bold: index === 0,
+          maxLength: 18,
+          lineGap: 2,
+        })
         pageOne.push(
-          { kind: 'text', text: String(item.totalAlarms), x: 352, y: rowY + 8, size: 10, color: [15, 23, 42] },
-          { kind: 'text', text: String(item.criticalAlarms), x: 435, y: rowY + 8, size: 10, color: [185, 28, 28], bold: item.criticalAlarms > 0 },
-          { kind: 'text', text: `${item.healthScore}%`, x: 500, y: rowY + 8, size: 10, color: [15, 23, 42] }
+          { kind: 'text', text: String(item.totalAlarms), x: getCenteredTextX(String(item.totalAlarms), 262, 9), y: rowY + 8, size: 9, color: [15, 23, 42] },
+          { kind: 'text', text: String(item.criticalAlarms), x: getCenteredTextX(String(item.criticalAlarms), 314, 9), y: rowY + 8, size: 9, color: [185, 28, 28], bold: item.criticalAlarms > 0 },
+          { kind: 'text', text: `${item.healthScore}%`, x: getCenteredTextX(`${item.healthScore}%`, 371, 9), y: rowY + 8, size: 9, color: [15, 23, 42] },
+          { kind: 'text', text: `${item.availability}%`, x: getCenteredTextX(`${item.availability}%`, 440, 9), y: rowY + 8, size: 9, color: [15, 23, 42] },
+          { kind: 'rect', x: 499, y: rowY - 6, width: 56, height: 20, fillColor: statusPalette.fill, strokeColor: statusPalette.stroke, lineWidth: 1 },
+          { kind: 'rect', x: 505, y: rowY, width: 6, height: 6, fillColor: statusPalette.stroke },
+          { kind: 'text', text: currentStatusLabel, x: getCenteredTextX(currentStatusLabel, 530, 7), y: rowY + 6, size: 7, color: statusPalette.text, bold: true }
         )
       })
 
       pageOne.push(
-        { kind: 'text', text: 'Resumo Executivo', x: 44, y: 122, size: 16, color: [15, 23, 42], bold: true },
-        { kind: 'rect', x: 44, y: 46, width: 524, height: 58, fillColor: [248, 250, 252], strokeColor: [226, 232, 240], lineWidth: 1 }
+        { kind: 'text', text: 'Resumo Executivo', x: 44, y: 116, size: 16, color: [15, 23, 42], bold: true },
+        { kind: 'rect', x: 44, y: 40, width: 524, height: 58, fillColor: [248, 250, 252], strokeColor: [226, 232, 240], lineWidth: 1 }
       )
       addWrappedText(
         pageOne,
         `No periodo ${selectedPeriodLabel}, o escopo ${reportScopeDescription} consolidou ${dashboardMetrics.totalOccurrences} ocorrencias em ${dashboardMetrics.affectedEquipment} equipamentos, com saude media de ${dashboardMetrics.averageHealth}% e disponibilidade media de ${dashboardMetrics.averageAvailability}%.`,
         58,
-        82,
+        76,
         { size: 10, color: [51, 65, 85], maxLength: 88, lineGap: 4 }
       )
 
@@ -719,7 +978,7 @@ export function Dashboard() {
         const justification = equipmentJustifications.get(equipment.id)
         const statusPalette = getStatusPalette(equipment.status)
 
-        const metaText = `${equipment.area} | Saude ${equipment.health}% | Disponibilidade ${equipment.availability}% | MTTR ${equipment.mttr.toFixed(1)}h | Ocorrencias ${equipment.totalOccurrences}`
+        const metaText = `${equipment.area} | Indice de Saude dos Ativos ${equipment.health}% | Disponibilidade Operacional ${equipment.availability}% | MTTR (Medio) ${equipment.mttr.toFixed(1)}h | Eventos Criticos ${equipment.totalOccurrences}`
         const metaHeight = getWrappedTextHeight(metaText, { size: 10, maxLength: 78, lineGap: 3 })
         const summaryText = justification?.summary ?? 'Sem justificativa disponivel.'
         const summaryHeight = getWrappedTextHeight(summaryText, { size: 11, maxLength: 76, lineGap: 4 })
@@ -907,26 +1166,26 @@ export function Dashboard() {
         
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
           <PerformanceGauge
-            value={dashboardMetrics.averageHealth}
-            title="Saúde Geral"
+            value={dashboardMetricsView.averageHealth}
+            title="Índice de Saúde dos Ativos"
             subtitle="Equipamentos com ocorrências no período"
           />
           
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xl font-semibold text-gray-900">Disponibilidade</h3>
+              <h3 className="text-xl font-semibold text-gray-900">Disponibilidade Operacional</h3>
               {renderTrend(availabilityDelta)}
             </div>
-            <p className="mb-1 text-[2.2rem] font-bold leading-none text-primary">{dashboardMetrics.averageAvailability}%</p>
+            <p className="mb-1 text-[2.2rem] font-bold leading-none text-primary">{dashboardMetricsView.averageAvailability}%</p>
             <p className="text-sm leading-6 text-gray-500">Média dos equipamentos impactados</p>
           </div>
           
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xl font-semibold text-gray-900">MTTR</h3>
+              <h3 className="text-xl font-semibold text-gray-900">MTTR (Médio)</h3>
               {renderTrend(mttrDelta, true)}
             </div>
-            <p className="mb-1 text-[2.2rem] font-bold leading-none text-gray-900">{dashboardMetrics.mttr}h</p>
+            <p className="mb-1 text-[2.2rem] font-bold leading-none text-gray-900">{dashboardMetricsView.mttr}h</p>
             <p className="text-sm leading-6 text-gray-500">Tempo médio de resolução no período</p>
             <button
               type="button"
@@ -952,13 +1211,13 @@ export function Dashboard() {
           
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xl font-semibold text-gray-900">Ocorrências</h3>
+              <h3 className="text-xl font-semibold text-gray-900">Eventos Críticos</h3>
               <div className="flex items-center text-danger">
                 <AlertTriangle className="h-4 w-4 mr-1" />
               </div>
             </div>
-            <p className="mb-1 text-[2.2rem] font-bold leading-none text-gray-900">{dashboardMetrics.totalOccurrences}</p>
-            <p className="text-sm leading-6 text-gray-500">{dashboardMetrics.affectedEquipment} equipamentos impactados</p>
+            <p className="mb-1 text-[2.2rem] font-bold leading-none text-gray-900">{dashboardMetricsView.totalOccurrences}</p>
+            <p className="text-sm leading-6 text-gray-500">{dashboardMetricsView.affectedEquipment} equipamentos impactados</p>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -1024,7 +1283,19 @@ export function Dashboard() {
           <UptimeChart data={selectedSummaries.map(({ month, availability }) => ({ month, availability }))} />
         </div>
         
-        <RankingView rankings={rankingData} />
+        <RankingView rankings={dashboardAggregatedEquipment.map((equipment, index) => ({
+          id: equipment.id,
+          equipmentId: equipment.id,
+          equipmentName: equipment.name,
+          clientName: equipment.client,
+          systemName: `${equipment.area} • ${equipment.name}`,
+          totalAlarms: equipment.totalOccurrences,
+          criticalAlarms: equipment.criticalOccurrences,
+          healthScore: equipment.health,
+          availability: equipment.availability,
+          rank: index + 1,
+          trend: index === 0 ? 'down' : index === 1 ? 'stable' : 'up',
+        }))} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
@@ -1044,7 +1315,7 @@ export function Dashboard() {
           </div>
           
           <div className="space-y-6">
-            <RecurringAlarms alarms={filteredAlarms} />
+            <RecurringAlarms alarms={dashboardAlarms} />
             
             <div>
               <div className="flex items-center justify-between mb-4">

@@ -133,14 +133,14 @@ export function EquipmentDetail() {
           <>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <PerformanceGauge value={equipment.health} title="Saúde" />
-              <PerformanceGauge value={equipment.availability} title="Disponibilidade" />
+              <PerformanceGauge value={equipment.availability} title="Disponibilidade Operacional" />
               <PerformanceGauge value={equipment.comfort ?? equipment.health} title="Conforto" />
               <PerformanceGauge value={equipment.performance ?? equipment.availability} title="Desempenho" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Ocorrências</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Eventos Críticos</h3>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-3 bg-danger/5 rounded-lg">
                     <div className="flex items-center gap-3">
@@ -170,7 +170,7 @@ export function EquipmentDetail() {
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Detalhes</h3>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-600">MTTR</span>
+                    <span className="text-gray-600">MTTR (Médio)</span>
                     <span className="font-semibold text-gray-900">{equipment.mttr.toFixed(1)}h</span>
                   </div>
                   <div className="flex items-center justify-between">

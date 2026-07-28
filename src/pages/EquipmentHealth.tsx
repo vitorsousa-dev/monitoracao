@@ -1,19 +1,84 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { DashboardLayout } from '@/components/layout/DashboardLayout'
-import { EquipmentCard } from '@/components/equipment/EquipmentCard'
 import { EquipmentFilters } from '@/components/equipment/EquipmentFilters'
-import { mockAlarms, mockEquipment } from '@/lib/mockData'
-import { SERASA_SITE_ID } from '@/lib/equipmentCatalog'
-import { loadAllPredictiveTasks } from '@/lib/predictiveTaskStorage'
-import { buildEquipmentJustification } from '@/lib/utils'
+import { EquipmentCard } from '@/components/equipment/EquipmentCard'
+import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { useScope } from '@/hooks/useScope'
-import { WEST_CORP_CLIENT, WEST_CORP_SITE_ID, WEST_CORP_SITE_NAME, westCorpSystems } from '@/lib/westCorpData'
+import { SERASA_SITE_ID } from '@/lib/equipmentCatalog'
+import { mockAlarms, mockEquipment } from '@/lib/mockData'
+import { loadAllPredictiveTasks } from '@/lib/predictiveTaskStorage'
+import {
+  SBA_TORRES_BRASIL_CLIENT,
+  SBA_TORRES_BRASIL_SITE_ID,
+  SBA_TORRES_BRASIL_SITE_NAME,
+  sbaTorresBrasilSystems,
+} from '@/lib/sbaTorresBrasilData'
+import {
+  sbaTorresBrasilMonthlyEquipmentSnapshots,
+  sbaTorresBrasilUnitHealthRollups,
+} from '@/lib/sbaTorresBrasilOperationalData'
+import { buildEquipmentJustification } from '@/lib/utils'
 import { westCorpUnitHealthRollups } from '@/lib/westCorpOperationalData'
+import { WEST_CORP_CLIENT, WEST_CORP_SITE_ID, WEST_CORP_SITE_NAME, westCorpSystems } from '@/lib/westCorpData'
+import { EquipmentMonthlySnapshot, SiteSystemCatalog } from '@/types'
 
 function getEquipmentSiteId(equipment: { client: string; siteId?: string }) {
   return equipment.siteId ?? (equipment.client === 'Serasa Experian' ? SERASA_SITE_ID : undefined)
 }
+
+interface StructuredUnitRollup {
+  id: string
+  unitName: string
+  systemId: string
+  systemName: string
+  unitType: 'ODU' | 'IDU' | 'SYSTEM'
+  totalAlerts: number
+  health: number
+  availability: number
+  mttr: number
+  status: 'Verde' | 'Amarelo' | 'Vermelho'
+  lastAlertAt: string
+}
+
+interface StructuredSiteConfig {
+  client: string
+  siteId: string
+  siteName: string
+  systems: SiteSystemCatalog[]
+  systemSnapshots?: EquipmentMonthlySnapshot[]
+  description: string
+  telemetryBadge: string
+  emptyTelemetryMessage: string
+  unitRollups?: StructuredUnitRollup[]
+}
+
+const structuredSiteConfigs: StructuredSiteConfig[] = [
+  {
+    client: WEST_CORP_CLIENT,
+    siteId: WEST_CORP_SITE_ID,
+    siteName: WEST_CORP_SITE_NAME,
+    systems: westCorpSystems,
+    systemSnapshots: undefined,
+    description:
+      'Estrutura cadastrada por sistema para facilitar a navegacao das unidades internas do site selecionado.',
+    telemetryBadge: 'Telemetria operacional carregada para as unidades deste site.',
+    emptyTelemetryMessage: 'Este sistema foi marcado como vago e nao possui unidades internas associadas.',
+    unitRollups: westCorpUnitHealthRollups,
+  },
+  {
+    client: SBA_TORRES_BRASIL_CLIENT,
+    siteId: SBA_TORRES_BRASIL_SITE_ID,
+    siteName: SBA_TORRES_BRASIL_SITE_NAME,
+    systems: sbaTorresBrasilSystems,
+    systemSnapshots: sbaTorresBrasilMonthlyEquipmentSnapshots,
+    description:
+      'Estrutura inicial cadastrada por sistema, com ODU e unidades internas individualizadas conforme informado.',
+    telemetryBadge: 'Telemetria de maio e junho carregada para os sistemas e equipamentos enviados.',
+    emptyTelemetryMessage:
+      'Sem telemetria operacional carregada para este sistema. As unidades internas cadastradas estao listadas abaixo.',
+    unitRollups: sbaTorresBrasilUnitHealthRollups,
+  },
+]
 
 export function EquipmentHealth() {
   const { selectedClient, selectedSite } = useScope()
@@ -23,12 +88,20 @@ export function EquipmentHealth() {
   const [typeFilter, setTypeFilter] = useState('')
   const [selectedSystemId, setSelectedSystemId] = useState<string>('')
 
-  const isWestCorpSelected =
-    selectedSite === WEST_CORP_SITE_ID ||
-    (selectedClient === WEST_CORP_CLIENT && selectedSite === 'all-sites')
+  const activeStructuredSite = useMemo(
+    () =>
+      structuredSiteConfigs.find(
+        (siteConfig) =>
+          selectedSite === siteConfig.siteId ||
+          (selectedSite === 'all-sites' && selectedClient === siteConfig.client)
+      ) ?? null,
+    [selectedClient, selectedSite]
+  )
+
+  const isStructuredSiteSelected = Boolean(activeStructuredSite)
 
   const filteredEquipment = useMemo(() => {
-    if (isWestCorpSelected) {
+    if (isStructuredSiteSelected) {
       return []
     }
 
@@ -43,10 +116,10 @@ export function EquipmentHealth() {
 
       return matchesClient && matchesSite && matchesSearch && matchesStatus && matchesType
     })
-  }, [isWestCorpSelected, searchTerm, selectedClient, selectedSite, statusFilter, typeFilter])
+  }, [isStructuredSiteSelected, searchTerm, selectedClient, selectedSite, statusFilter, typeFilter])
 
   const stats = useMemo(() => {
-    const scopedEquipment = isWestCorpSelected
+    const scopedEquipment = isStructuredSiteSelected
       ? []
       : mockEquipment.filter((equipment) => {
           const matchesClient = selectedClient === 'all-clients' || equipment.client === selectedClient
@@ -60,61 +133,76 @@ export function EquipmentHealth() {
       warning: scopedEquipment.filter((equipment) => equipment.status === 'Amarelo').length,
       critical: scopedEquipment.filter((equipment) => equipment.status === 'Vermelho').length,
     }
-  }, [isWestCorpSelected, selectedClient, selectedSite])
+  }, [isStructuredSiteSelected, selectedClient, selectedSite])
 
-  const filteredWestCorpSystems = useMemo(() => {
-    if (!isWestCorpSelected) {
+  const filteredStructuredSystems = useMemo(() => {
+    if (!activeStructuredSite) {
       return []
     }
 
     const normalizedSearch = searchTerm.trim().toLowerCase()
     if (!normalizedSearch) {
-      return westCorpSystems
+      return activeStructuredSite.systems
     }
 
-    return westCorpSystems.filter((system) => {
-      const haystack = [
-        system.systemName,
-        ...system.outdoorUnits,
-        ...system.internalUnits,
-      ]
+    return activeStructuredSite.systems.filter((system) => {
+      const haystack = [system.systemName, ...system.outdoorUnits, ...system.internalUnits]
         .join(' ')
         .toLowerCase()
 
       return haystack.includes(normalizedSearch)
     })
-  }, [isWestCorpSelected, searchTerm])
+  }, [activeStructuredSite, searchTerm])
 
   useEffect(() => {
-    if (!isWestCorpSelected) {
+    if (!activeStructuredSite) {
       setSelectedSystemId('')
       return
     }
 
-    const nextSystemId = filteredWestCorpSystems[0]?.id ?? ''
+    const nextSystemId = filteredStructuredSystems[0]?.id ?? ''
     setSelectedSystemId((current) => {
-      if (current && filteredWestCorpSystems.some((system) => system.id === current)) {
+      if (current && filteredStructuredSystems.some((system) => system.id === current)) {
         return current
       }
       return nextSystemId
     })
-  }, [filteredWestCorpSystems, isWestCorpSelected])
+  }, [activeStructuredSite, filteredStructuredSystems])
 
-  const selectedWestCorpSystem = filteredWestCorpSystems.find((system) => system.id === selectedSystemId)
-  const selectedWestCorpUnits = useMemo(
-    () => westCorpUnitHealthRollups.filter((unit) => unit.systemId === selectedSystemId),
-    [selectedSystemId]
+  const selectedStructuredSystem = filteredStructuredSystems.find((system) => system.id === selectedSystemId)
+  const selectedStructuredUnits = useMemo(
+    () => activeStructuredSite?.unitRollups?.filter((unit) => unit.systemId === selectedSystemId) ?? [],
+    [activeStructuredSite, selectedSystemId]
   )
-  const westCorpSummary = useMemo(
-    () => ({
-      totalSystems: westCorpSystems.length,
-      totalOutdoorUnits: westCorpSystems.reduce((sum, system) => sum + system.outdoorUnits.length, 0),
-      totalInternalUnits: westCorpSystems.reduce((sum, system) => sum + system.internalUnits.length, 0),
-      vacantSystems: westCorpSystems.filter((system) => system.status === 'vacant').length,
-      totalAlerts: westCorpUnitHealthRollups.reduce((sum, unit) => sum + unit.totalAlerts, 0),
-    }),
-    []
-  )
+  const selectedStructuredSnapshot = useMemo(() => {
+    if (!activeStructuredSite || !selectedStructuredSystem) {
+      return null
+    }
+
+    return (
+      activeStructuredSite.systemSnapshots?.find((snapshot) => snapshot.name === selectedStructuredSystem.systemName) ?? null
+    )
+  }, [activeStructuredSite, selectedStructuredSystem])
+  const structuredSummary = useMemo(() => {
+    if (!activeStructuredSite) {
+      return null
+    }
+
+    const unitRollups = activeStructuredSite.unitRollups ?? []
+    const systemSnapshots = activeStructuredSite.systemSnapshots ?? []
+
+    return {
+      totalSystems: activeStructuredSite.systems.length,
+      totalOutdoorUnits: activeStructuredSite.systems.reduce((sum, system) => sum + system.outdoorUnits.length, 0),
+      totalInternalUnits: activeStructuredSite.systems.reduce((sum, system) => sum + system.internalUnits.length, 0),
+      vacantSystems: activeStructuredSite.systems.filter((system) => system.status === 'vacant').length,
+      totalAlerts:
+        systemSnapshots.length > 0
+          ? systemSnapshots.reduce((sum, snapshot) => sum + snapshot.totalOccurrences, 0)
+          : unitRollups.reduce((sum, unit) => sum + unit.totalAlerts, 0),
+      hasTelemetry: unitRollups.length > 0 || systemSnapshots.length > 0,
+    }
+  }, [activeStructuredSite])
 
   return (
     <DashboardLayout>
@@ -122,50 +210,52 @@ export function EquipmentHealth() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Saúde dos Equipamentos</h1>
           <p className="text-gray-500">
-            {isWestCorpSelected
-              ? 'Visualização estruturada por sistemas e unidades internas do site West Corp'
+            {activeStructuredSite
+              ? `Visualizacao estruturada por sistemas e unidades internas do site ${activeStructuredSite.siteName}`
               : 'Monitoramento detalhado de todos os equipamentos'}
           </p>
         </div>
 
-        {isWestCorpSelected ? (
+        {activeStructuredSite && structuredSummary ? (
           <>
             <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-wide text-primary">Cliente e site</p>
-                  <h2 className="mt-1 text-xl font-semibold text-gray-900">{WEST_CORP_SITE_NAME}</h2>
+                  <h2 className="mt-1 text-xl font-semibold text-gray-900">{activeStructuredSite.siteName}</h2>
                   <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-500">
-                    Estrutura cadastrada por sistema para facilitar a navegação das unidades internas do site
-                    {` ${WEST_CORP_CLIENT}`}. As métricas individuais podem ser enriquecidas depois com a telemetria
-                    operacional de cada sistema.
+                    {activeStructuredSite.description}
                   </p>
                 </div>
                 <div className="rounded-xl border border-dashed border-primary/30 bg-primary/5 px-4 py-3 text-sm text-primary">
-                  Modo de visualização por sistema habilitado para o site selecionado.
+                  {activeStructuredSite.telemetryBadge}
                 </div>
               </div>
 
               <div className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-4">
                 <div className="rounded-xl border border-gray-200 p-4">
                   <p className="text-sm text-gray-500 mb-1">Sistemas</p>
-                  <p className="text-2xl font-bold text-gray-900">{westCorpSummary.totalSystems}</p>
+                  <p className="text-2xl font-bold text-gray-900">{structuredSummary.totalSystems}</p>
                 </div>
                 <div className="rounded-xl border border-gray-200 p-4">
                   <p className="text-sm text-gray-500 mb-1">Condensadoras</p>
-                  <p className="text-2xl font-bold text-gray-900">{westCorpSummary.totalOutdoorUnits}</p>
+                  <p className="text-2xl font-bold text-gray-900">{structuredSummary.totalOutdoorUnits}</p>
                 </div>
                 <div className="rounded-xl border border-gray-200 p-4">
                   <p className="text-sm text-gray-500 mb-1">Unidades internas</p>
-                  <p className="text-2xl font-bold text-gray-900">{westCorpSummary.totalInternalUnits}</p>
+                  <p className="text-2xl font-bold text-gray-900">{structuredSummary.totalInternalUnits}</p>
                 </div>
                 <div className="rounded-xl border border-gray-200 p-4">
                   <p className="text-sm text-gray-500 mb-1">Sistemas vagos</p>
-                  <p className="text-2xl font-bold text-gray-900">{westCorpSummary.vacantSystems}</p>
+                  <p className="text-2xl font-bold text-gray-900">{structuredSummary.vacantSystems}</p>
                 </div>
                 <div className="rounded-xl border border-gray-200 p-4 md:col-span-2">
-                  <p className="text-sm text-gray-500 mb-1">Alertas carregados (mai/jun)</p>
-                  <p className="text-2xl font-bold text-gray-900">{westCorpSummary.totalAlerts}</p>
+                  <p className="text-sm text-gray-500 mb-1">
+                    {structuredSummary.hasTelemetry ? 'Alertas carregados' : 'Telemetria operacional'}
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {structuredSummary.hasTelemetry ? structuredSummary.totalAlerts : 'Pendente'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -190,7 +280,7 @@ export function EquipmentHealth() {
               </div>
 
               <div className="mt-5 flex flex-wrap gap-2">
-                {filteredWestCorpSystems.map((system) => (
+                {filteredStructuredSystems.map((system) => (
                   <button
                     key={system.id}
                     type="button"
@@ -207,42 +297,52 @@ export function EquipmentHealth() {
               </div>
             </div>
 
-            {selectedWestCorpSystem ? (
+            {selectedStructuredSystem ? (
               <div className="space-y-6">
                 <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <div className="flex items-center gap-3">
-                        <h3 className="text-xl font-semibold text-gray-900">{selectedWestCorpSystem.systemName}</h3>
+                        <h3 className="text-xl font-semibold text-gray-900">{selectedStructuredSystem.systemName}</h3>
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                            selectedWestCorpSystem.status === 'vacant'
+                            selectedStructuredSystem.status === 'vacant'
                               ? 'bg-gray-100 text-gray-600'
                               : 'bg-primary/10 text-primary'
                           }`}
                         >
-                          {selectedWestCorpSystem.status === 'vacant' ? 'Sistema vago' : 'Sistema ativo'}
+                          {selectedStructuredSystem.status === 'vacant' ? 'Sistema vago' : 'Sistema ativo'}
                         </span>
                       </div>
                       <p className="mt-2 text-sm text-gray-500">
-                        {selectedWestCorpSystem.outdoorUnits.length} condensadora(s),{' '}
-                        {selectedWestCorpSystem.internalUnits.length} unidade(s) interna(s) e{' '}
-                        {selectedWestCorpUnits.reduce((sum, unit) => sum + unit.totalAlerts, 0)} alerta(s) associado(s).
+                        {selectedStructuredSystem.outdoorUnits.length} condensadora(s),{' '}
+                        {selectedStructuredSystem.internalUnits.length} unidade(s) interna(s)
+                        {selectedStructuredUnits.length > 0
+                          ? ` e ${selectedStructuredUnits.reduce((sum, unit) => sum + unit.totalAlerts, 0)} alerta(s) associado(s).`
+                          : selectedStructuredSnapshot
+                            ? `, ${selectedStructuredSnapshot.totalOccurrences} ocorrencia(s) no periodo e ${selectedStructuredSnapshot.criticalOccurrences} evento(s) critico(s).`
+                            : '.'}
                       </p>
                     </div>
-                    <Link
-                      to={`/equipment/west-system-${selectedWestCorpSystem.id}?tab=history`}
-                      className="inline-flex items-center rounded-lg border border-primary/20 bg-primary/5 px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
-                    >
-                      Abrir historico do sistema
-                    </Link>
+                    {selectedStructuredUnits.length > 0 ? (
+                      <Link
+                        to={`/equipment/west-system-${selectedStructuredSystem.id}?tab=history`}
+                        className="inline-flex items-center rounded-lg border border-primary/20 bg-primary/5 px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+                      >
+                        Abrir historico do sistema
+                      </Link>
+                    ) : (
+                      <span className="inline-flex items-center rounded-lg border border-dashed border-gray-200 px-4 py-2 text-sm font-medium text-gray-500">
+                        Historico detalhado sera habilitado apos o carregamento da telemetria
+                      </span>
+                    )}
                   </div>
 
                   <div className="mt-5">
                     <p className="text-sm font-semibold uppercase tracking-wide text-gray-500">Condensadoras / ODU</p>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {selectedWestCorpSystem.outdoorUnits.length > 0 ? (
-                        selectedWestCorpSystem.outdoorUnits.map((unit) => (
+                      {selectedStructuredSystem.outdoorUnits.length > 0 ? (
+                        selectedStructuredSystem.outdoorUnits.map((unit) => (
                           <span
                             key={unit}
                             className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700"
@@ -257,11 +357,31 @@ export function EquipmentHealth() {
                       )}
                     </div>
                   </div>
+                  {selectedStructuredSnapshot ? (
+                    <div className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-4">
+                      <div className="rounded-xl border border-gray-200 p-4">
+                        <p className="text-sm text-gray-500 mb-1">Eventos Críticos</p>
+                        <p className="text-2xl font-bold text-gray-900">{selectedStructuredSnapshot.totalOccurrences}</p>
+                      </div>
+                      <div className="rounded-xl border border-gray-200 p-4">
+                        <p className="text-sm text-gray-500 mb-1">Índice de Saúde dos Ativos</p>
+                        <p className="text-2xl font-bold text-gray-900">{selectedStructuredSnapshot.health}%</p>
+                      </div>
+                      <div className="rounded-xl border border-gray-200 p-4">
+                        <p className="text-sm text-gray-500 mb-1">Disponibilidade Operacional</p>
+                        <p className="text-2xl font-bold text-gray-900">{selectedStructuredSnapshot.availability}%</p>
+                      </div>
+                      <div className="rounded-xl border border-gray-200 p-4">
+                        <p className="text-sm text-gray-500 mb-1">MTTR (Médio)</p>
+                        <p className="text-2xl font-bold text-gray-900">{selectedStructuredSnapshot.mttr}h</p>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {selectedWestCorpUnits.length > 0 ? (
-                    selectedWestCorpUnits.map((unit) => (
+                {selectedStructuredUnits.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {selectedStructuredUnits.map((unit) => (
                       <div key={unit.id} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                         <div className="flex items-start justify-between gap-3">
                           <div>
@@ -308,15 +428,36 @@ export function EquipmentHealth() {
                           </Link>
                         </div>
                       </div>
-                    ))
-                  ) : (
-                    <div className="col-span-full rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center">
-                      <p className="text-sm font-medium text-gray-700">
-                        Este sistema foi marcado como vago e nao possui unidades internas associadas.
-                      </p>
+                    ))}
+                  </div>
+                ) : selectedStructuredSystem.internalUnits.length > 0 ? (
+                  <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                    <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <h4 className="text-lg font-semibold text-gray-900">Unidades internas cadastradas</h4>
+                        <p className="text-sm text-gray-500">{activeStructuredSite.emptyTelemetryMessage}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-gray-600">
+                        {selectedStructuredSystem.internalUnits.length} unidade(s) interna(s) registradas
+                      </div>
                     </div>
-                  )}
-                </div>
+                    <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      {selectedStructuredSystem.internalUnits.map((unit) => (
+                        <div key={unit} className="rounded-xl border border-gray-200 bg-slate-50 p-4">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Unidade interna</p>
+                          <h5 className="mt-2 text-base font-semibold text-gray-900">{unit}</h5>
+                          <p className="mt-2 text-sm leading-6 text-gray-500">
+                            Aguardando historico operacional, alarmes e analises preditivas para detalhamento.
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center">
+                    <p className="text-sm font-medium text-gray-700">{activeStructuredSite.emptyTelemetryMessage}</p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center">

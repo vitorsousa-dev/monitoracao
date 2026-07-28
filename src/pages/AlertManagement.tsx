@@ -7,12 +7,14 @@ import { useAuth } from '@/hooks/useAuth'
 import { findEquipmentCatalogItem } from '@/lib/equipmentCatalog'
 import { loadEquipmentSchedules, loadKanbanStates, moveEquipmentKanbanCard } from '@/lib/maintenanceWorkflowStorage'
 import { mockAlarms } from '@/lib/mockData'
+import { loadAllPredictiveTasks, isPredictiveTaskScoped } from '@/lib/predictiveTaskStorage'
 import { westCorpAlarms } from '@/lib/westCorpOperationalData'
-import { AlertKanbanColumn, Alarm, EquipmentHistoryTarget, MaintenanceSchedule } from '@/types'
+import { AlertKanbanColumn, Alarm, EquipmentHistoryTarget, MaintenanceSchedule, PredictiveTask } from '@/types'
 
 type BoardCard = {
   equipment: EquipmentHistoryTarget
   alarms: Alarm[]
+  anomalies: PredictiveTask[]
   openSchedules: MaintenanceSchedule[]
   column: AlertKanbanColumn
   lastMovement?: string
@@ -61,6 +63,19 @@ function groupScopedAlarms(selectedClient: string, selectedSite: string) {
   }, new Map())
 }
 
+function groupScopedAnomalies(selectedClient: string, selectedSite: string) {
+  const predictiveTasks = loadAllPredictiveTasks()
+    .filter((task) => isPredictiveTaskScoped(task, selectedClient, selectedSite))
+    .filter((task) => task.status !== 'completed')
+
+  return predictiveTasks.reduce<Map<string, PredictiveTask[]>>((accumulator, task) => {
+    const current = accumulator.get(task.equipmentId) ?? []
+    current.push(task)
+    accumulator.set(task.equipmentId, current)
+    return accumulator
+  }, new Map())
+}
+
 function isEquipmentScoped(equipment: EquipmentHistoryTarget, selectedClient: string, selectedSite: string) {
   const matchesClient = selectedClient === 'all-clients' || equipment.client === selectedClient
   const matchesSite = selectedSite === 'all-sites' || equipment.siteId === selectedSite
@@ -77,6 +92,14 @@ function getColumnFromSchedules(schedules: MaintenanceSchedule[]): AlertKanbanCo
   return pending ? 'pending' : 'completed'
 }
 
+function getColumnFromAnomalies(anomalies: PredictiveTask[]): AlertKanbanColumn {
+  if (anomalies.some((task) => task.status === 'in_progress')) {
+    return 'in_progress'
+  }
+
+  return 'pending'
+}
+
 export function AlertManagement() {
   const { selectedClient, selectedSite } = useScope()
   const { user } = useAuth()
@@ -86,7 +109,8 @@ export function AlertManagement() {
 
   const boardCards = useMemo(() => {
     const groupedAlarms = groupScopedAlarms(selectedClient, selectedSite)
-    const equipmentIds = new Set(groupedAlarms.keys())
+    const groupedAnomalies = groupScopedAnomalies(selectedClient, selectedSite)
+    const equipmentIds = new Set([...groupedAlarms.keys(), ...groupedAnomalies.keys()])
 
     Object.keys(kanbanStates).forEach((equipmentId) => {
       const equipment = findEquipmentCatalogItem(equipmentId)
@@ -112,19 +136,27 @@ export function AlertManagement() {
         }
 
         const alarms = groupedAlarms.get(equipmentId) ?? []
+        const anomalies = groupedAnomalies.get(equipmentId) ?? []
         const schedules = loadEquipmentSchedules(equipmentId)
         const openSchedules = schedules.filter((schedule) => schedule.status === 'Agendado' || schedule.status === 'Em andamento')
         const state = kanbanStates[equipmentId]
 
-        if (state?.archived && openSchedules.length === 0) {
+        if (state?.archived && openSchedules.length === 0 && alarms.length === 0 && anomalies.length === 0) {
           return
         }
 
-        const column = state?.status ?? (openSchedules.length > 0 ? getColumnFromSchedules(openSchedules) : 'pending')
+        const column =
+          state?.status ??
+          (openSchedules.length > 0
+            ? getColumnFromSchedules(openSchedules)
+            : anomalies.length > 0
+              ? getColumnFromAnomalies(anomalies)
+              : 'pending')
 
         resolvedCards.push({
           equipment,
           alarms,
+          anomalies,
           openSchedules,
           column,
           lastMovement: state?.updatedAt,
@@ -166,7 +198,7 @@ export function AlertManagement() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Gestao de Alertas</h1>
           <p className="text-gray-500">
-            Kanban operacional dos equipamentos com alertas ativos e agendamentos abertos no escopo atual.
+            Kanban operacional dos equipamentos com alertas ativos, anomalias preditivas e agendamentos abertos no escopo atual.
           </p>
         </div>
 
@@ -218,20 +250,37 @@ export function AlertManagement() {
                             </p>
                           </div>
                           <span className="rounded-full bg-danger/10 px-3 py-1 text-xs font-semibold text-danger">
-                            {card.alarms.length} alertas
+                            {card.alarms.length > 0
+                              ? `${card.alarms.length} alertas`
+                              : `${card.anomalies.length} anomalias`}
                           </span>
                         </div>
 
-                        <div className="mt-4 grid grid-cols-2 gap-3 text-center">
+                        <div className="mt-4 grid grid-cols-3 gap-3 text-center">
                           <div className="rounded-xl bg-slate-50 p-3">
                             <p className="text-xs text-gray-500">Saúde</p>
                             <p className="mt-1 text-lg font-bold text-gray-900">{card.equipment.health}%</p>
+                          </div>
+                          <div className="rounded-xl bg-slate-50 p-3">
+                            <p className="text-xs text-gray-500">Anomalias</p>
+                            <p className="mt-1 text-lg font-bold text-gray-900">{card.anomalies.length}</p>
                           </div>
                           <div className="rounded-xl bg-slate-50 p-3">
                             <p className="text-xs text-gray-500">Agendamentos abertos</p>
                             <p className="mt-1 text-lg font-bold text-gray-900">{card.openSchedules.length}</p>
                           </div>
                         </div>
+
+                        {card.anomalies[0] && (
+                          <div className="mt-4 rounded-xl border border-warning/20 bg-warning/5 p-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-warning">Anomalia preditiva</p>
+                            <p className="mt-1 text-sm font-medium text-gray-900">{card.anomalies[0].title}</p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              Status: {card.anomalies[0].status === 'in_progress' ? 'Em andamento' : 'Pendente'} •
+                              Risco {card.anomalies[0].riskScore}
+                            </p>
+                          </div>
+                        )}
 
                         {card.openSchedules[0] && (
                           <div className="mt-4 rounded-xl border border-primary/10 bg-primary/5 p-3">
