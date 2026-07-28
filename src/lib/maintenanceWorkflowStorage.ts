@@ -1,5 +1,6 @@
 import { applyScheduleMaterialConsumption, loadInventoryAssets } from '@/lib/assetInventoryStorage'
 import { appendAutomatedEquipmentHistoryEntry } from '@/lib/equipmentHistoryStorage'
+import { syncFinancialEntriesWithSchedule } from '@/lib/financialManagementStorage'
 import {
   AlertKanbanColumn,
   AlertKanbanState,
@@ -178,6 +179,7 @@ export function createEquipmentSchedule(equipment: EquipmentHistoryTarget, draft
   }
 
   saveStore(nextStore)
+  syncFinancialEntriesWithSchedule(nextSchedule, actor)
   appendAutomatedEquipmentHistoryEntry(equipment, actor, {
     actionType: 'Agendamento',
     description: `Agendamento criado para ${draft.date} às ${draft.time}.`,
@@ -245,6 +247,11 @@ export function updateEquipmentSchedule(
     kanbanByEquipment: nextKanban,
   })
 
+  const syncedSchedule = nextSchedules.find((schedule) => schedule.id === scheduleId)
+  if (syncedSchedule) {
+    syncFinancialEntriesWithSchedule(syncedSchedule, actor)
+  }
+
   appendAutomatedEquipmentHistoryEntry(equipment, actor, {
     actionType: draft.status === 'Finalizado' ? 'Conclusao' : draft.status === 'Cancelado' ? 'Atualizacao' : 'Agendamento',
     description: `Agendamento atualizado para o status ${draft.status}.`,
@@ -300,6 +307,13 @@ export function moveEquipmentKanbanCard(
     schedulesByEquipment: nextSchedulesByEquipment,
     kanbanByEquipment: nextKanban,
   })
+
+  if (relatedOpenSchedule) {
+    const syncedSchedule = (nextSchedulesByEquipment[equipment.id] ?? []).find((schedule) => schedule.id === relatedOpenSchedule.id)
+    if (syncedSchedule) {
+      syncFinancialEntriesWithSchedule(syncedSchedule, actor)
+    }
+  }
 
   appendAutomatedEquipmentHistoryEntry(equipment, actor, {
     actionType: 'Atualizacao',
@@ -363,6 +377,11 @@ export function registerScheduleStep(
     },
     kanbanByEquipment: nextKanban,
   })
+
+  const syncedSchedule = nextSchedules.find((schedule) => schedule.id === scheduleId)
+  if (syncedSchedule) {
+    syncFinancialEntriesWithSchedule(syncedSchedule, actor)
+  }
 
   appendAutomatedEquipmentHistoryEntry(equipment, actor, {
     actionType: stepLabel === 'Concluido' ? 'Conclusao' : 'Atualizacao',

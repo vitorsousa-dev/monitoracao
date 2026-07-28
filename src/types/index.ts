@@ -425,6 +425,62 @@ export interface MaintenanceScheduleDraft {
   status: MaintenanceScheduleStatus
 }
 
+export interface FinancialEntry {
+  id: string
+  scheduleId: string
+  equipmentId: string
+  equipmentName: string
+  clientName: string
+  siteId?: string
+  siteName?: string
+  maintenanceType: MaintenanceScheduleType
+  technician: string
+  scheduledDate: string
+  scheduledTime: string
+  workflowStatus: MaintenanceScheduleStatus
+  kanbanStatus: AlertKanbanColumn
+  plannedRevenue: number
+  laborCost: number
+  materialsCost: number
+  outsourcedCost: number
+  travelCost: number
+  otherCost: number
+  billedAmount: number
+  receivedAmount: number
+  notes: string
+  budgetAppliedAt?: string
+  budgetAppliedAmount?: number
+  createdAt: string
+  createdBy: string
+  updatedAt: string
+  updatedBy: string
+}
+
+export interface FinancialEntryDraft {
+  scheduleId: string
+  plannedRevenue: number
+  laborCost: number
+  materialsCost: number
+  outsourcedCost: number
+  travelCost: number
+  otherCost: number
+  billedAmount: number
+  receivedAmount: number
+  notes: string
+}
+
+export interface FinancialBudget {
+  id: string
+  clientName: string
+  siteId?: string
+  siteName?: string
+  currentBalance: number
+  createdAt: string
+  createdBy: string
+  updatedAt: string
+  updatedBy: string
+}
+
 export type AlertKanbanColumn = 'pending' | 'in_progress' | 'completed'
 
 export interface AlertKanbanState {

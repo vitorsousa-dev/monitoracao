@@ -18,7 +18,7 @@ import {
   mockAlarms
 } from '@/lib/mockData'
 import { Alarm, Equipment, EquipmentJustification, SiteLocation, SystemRanking } from '@/types'
-import { buildEquipmentJustification, buildFinancialHealthMetrics, getHealthStatusColor, getHealthStatusText } from '@/lib/utils'
+import { buildEquipmentJustification, getHealthStatusText } from '@/lib/utils'
 import {
   sbaTorresBrasilAlarms,
   sbaTorresBrasilMonthlyEquipmentSnapshots,
@@ -440,7 +440,6 @@ export function Dashboard() {
   const [startMonth, setStartMonth] = useState(availableMonths[0]?.monthKey ?? '')
   const [endMonth, setEndMonth] = useState(availableMonths[availableMonths.length - 1]?.monthKey ?? '')
   const [showMttrDetails, setShowMttrDetails] = useState(false)
-  const [showFinancialDetails, setShowFinancialDetails] = useState(false)
   const kanbanStates = useMemo(() => loadKanbanStates(), [workflowVersion])
 
   useEffect(() => {
@@ -752,16 +751,6 @@ export function Dashboard() {
     return new Map<string, EquipmentJustification>(entries)
   }, [dashboardAlarms, dashboardPredictiveTasks, highlightedEquipment])
 
-  const financialMetrics = useMemo(
-    () => buildFinancialHealthMetrics(
-      dashboardAlarms,
-      dashboardPredictiveTasks,
-      dashboardMetricsView.averageHealth,
-      dashboardMetricsView.averageAvailability
-    ),
-    [dashboardAlarms, dashboardMetricsView.averageAvailability, dashboardMetricsView.averageHealth, dashboardPredictiveTasks]
-  )
-
   const currentSummary = selectedSummaries[selectedSummaries.length - 1]
   const currentSummaryIndex = currentSummary
     ? allScopedSummaries.findIndex((summary) => summary.monthKey === currentSummary.monthKey)
@@ -818,13 +807,6 @@ export function Dashboard() {
       </div>
     )
   }
-
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-      maximumFractionDigits: 0,
-    }).format(value)
 
   const handleExportOverviewPdf = () => {
     const followupAlarms = filteredAlarms
@@ -1164,7 +1146,7 @@ export function Dashboard() {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           <PerformanceGauge
             value={dashboardMetricsView.averageHealth}
             title="Índice de Saúde dos Ativos"
@@ -1220,60 +1202,6 @@ export function Dashboard() {
             <p className="text-sm leading-6 text-gray-500">{dashboardMetricsView.affectedEquipment} equipamentos impactados</p>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xl font-semibold text-gray-900">Saúde Financeira</h3>
-              <span
-                className="text-sm font-semibold"
-                style={{ color: getHealthStatusColor(financialMetrics.score) }}
-              >
-                {financialMetrics.savingsRate}%
-              </span>
-            </div>
-            <p
-              className="mb-1 text-[2.2rem] font-bold leading-none"
-              style={{ color: getHealthStatusColor(financialMetrics.score) }}
-            >
-              {financialMetrics.score}%
-            </p>
-            <p className="text-sm leading-6 text-gray-500">
-              Custo liquido estimado de {formatCurrency(financialMetrics.netEstimatedCost)} no período
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowFinancialDetails((current) => !current)}
-              className="mt-3 inline-flex items-center rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-            >
-              {showFinancialDetails ? 'Ocultar detalhes' : 'Mais detalhes'}
-            </button>
-            {showFinancialDetails && (
-              <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Leitura financeira</p>
-                <div className="mt-3 space-y-2 text-sm text-gray-700">
-                  <div className="flex items-center justify-between gap-3">
-                    <span>Exposição corretiva estimada</span>
-                    <span className="font-semibold">{formatCurrency(financialMetrics.correctiveExposure)}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span>Atividades preditivas planejadas</span>
-                    <span className="font-semibold">{formatCurrency(financialMetrics.predictiveInvestment)}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span>Economia com visitas técnicas evitadas</span>
-                    <span className="font-semibold text-success">{formatCurrency(financialMetrics.avoidedTechnicalVisits)}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span>Desperdício operacional evitado</span>
-                    <span className="font-semibold text-success">{formatCurrency(financialMetrics.avoidedWaste)}</span>
-                  </div>
-                </div>
-                <p className="mt-3 text-xs leading-5 text-gray-600">
-                  A métrica considera valores de mercado para resposta a alarmes, custo estimado das ações preditivas e a
-                  economia gerada ao evitar visitas técnicas improdutivas ou manutenção sem ganho efetivo.
-                </p>
-              </div>
-            )}
-          </div>
         </div>
 
         <SiteMap sites={visibleSiteSummaries} periodLabel={selectedPeriodLabel} />

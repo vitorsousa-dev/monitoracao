@@ -9,6 +9,7 @@ import { Settings } from './pages/Settings'
 import { Alarms } from './pages/Alarms'
 import { AlertManagement } from './pages/AlertManagement'
 import { AssetManagement } from './pages/AssetManagement'
+import { FinancialManagement } from './pages/FinancialManagement'
 import { PredictiveMaintenance } from './pages/PredictiveMaintenance'
 import { Sustainability } from './pages/Sustainability'
 import { Users } from './pages/Users'
@@ -45,6 +46,7 @@ function App() {
       <Route path="/alarms" element={<Alarms />} />
       <Route path="/alert-management" element={<AlertManagement />} />
       <Route path="/assets" element={<AssetManagement />} />
+      <Route path="/financial" element={<FinancialManagement />} />
       <Route path="/predictive" element={<PredictiveMaintenance />} />
       <Route path="/sustainability" element={<Sustainability />} />
       <Route
