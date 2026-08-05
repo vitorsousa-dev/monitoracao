@@ -291,7 +291,7 @@ export interface EquipmentHistoryTarget {
   moderateOccurrences: number
   informativeOccurrences: number
   lastUpdated: string
-  source: 'equipment' | 'west-system' | 'west-unit' | 'sba-system'
+  source: 'equipment' | 'west-system' | 'west-unit' | 'sba-system' | 'wellnesstec-system' | 'wellnesstec-unit'
 }
 
 export type InventoryAssetCategory = string

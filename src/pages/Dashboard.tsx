@@ -28,6 +28,13 @@ import {
 import { SBA_TORRES_BRASIL_SITE_ID } from '@/lib/sbaTorresBrasilData'
 import { westCorpAlarms, westCorpMonthlyEquipmentSnapshots, westCorpMonthlySummaries, westCorpSiteMonthlySnapshots } from '@/lib/westCorpOperationalData'
 import { WEST_CORP_SITE_ID } from '@/lib/westCorpData'
+import {
+  wellnesstecAlarms,
+  wellnesstecMonthlyEquipmentSnapshots,
+  wellnesstecMonthlySummaries,
+  wellnesstecSiteMonthlySnapshots,
+} from '@/lib/wellnesstecOperationalData'
+import { WELLNESSTEC_SITE_ID } from '@/lib/wellnesstecData'
 import { TrendingUp, TrendingDown, Activity, AlertTriangle, Minus, Printer } from 'lucide-react'
 
 type PdfColor = [number, number, number]
@@ -365,16 +372,18 @@ export function Dashboard() {
       })),
       ...westCorpMonthlyEquipmentSnapshots,
       ...sbaTorresBrasilMonthlyEquipmentSnapshots,
+      ...wellnesstecMonthlyEquipmentSnapshots,
     ],
     []
   )
   const allSiteSnapshots = useMemo(
     () => [
       ...mockSiteMonthlySnapshots.filter(
-        (snapshot) => snapshot.siteId !== WEST_CORP_SITE_ID && snapshot.siteId !== SBA_TORRES_BRASIL_SITE_ID
+        (snapshot) => snapshot.siteId !== WEST_CORP_SITE_ID && snapshot.siteId !== SBA_TORRES_BRASIL_SITE_ID && snapshot.siteId !== WELLNESSTEC_SITE_ID
       ),
       ...westCorpSiteMonthlySnapshots,
       ...sbaTorresBrasilSiteMonthlySnapshots,
+      ...wellnesstecSiteMonthlySnapshots,
     ],
     []
   )
@@ -383,6 +392,8 @@ export function Dashboard() {
     const latestWestSnapshot = sortedWestSnapshots[sortedWestSnapshots.length - 1]
     const sortedSbaSnapshots = [...sbaTorresBrasilSiteMonthlySnapshots].sort((a, b) => a.monthKey.localeCompare(b.monthKey))
     const latestSbaSnapshot = sortedSbaSnapshots[sortedSbaSnapshots.length - 1]
+    const sortedWellnesstecSnapshots = [...wellnesstecSiteMonthlySnapshots].sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+    const latestWellnesstecSnapshot = sortedWellnesstecSnapshots[sortedWellnesstecSnapshots.length - 1]
     return mockSites.map((site) => {
       if (site.siteId === WEST_CORP_SITE_ID && latestWestSnapshot) {
         return latestWestSnapshot
@@ -392,10 +403,14 @@ export function Dashboard() {
         return latestSbaSnapshot
       }
 
+      if (site.siteId === WELLNESSTEC_SITE_ID && latestWellnesstecSnapshot) {
+        return latestWellnesstecSnapshot
+      }
+
       return site
     })
   }, [])
-  const allAlarms = useMemo(() => [...mockAlarms, ...westCorpAlarms, ...sbaTorresBrasilAlarms], [])
+  const allAlarms = useMemo(() => [...mockAlarms, ...westCorpAlarms, ...sbaTorresBrasilAlarms, ...wellnesstecAlarms], [])
   const allPredictiveTasks = useMemo(() => loadAllPredictiveTasks(), [])
   const allScopedSummaries = useMemo(() => {
     const grouped = new Map<string, typeof allEquipmentSnapshots>()
@@ -423,6 +438,7 @@ export function Dashboard() {
             sortedSnapshots[0]?.month ??
             westCorpMonthlySummaries.find((summary) => summary.monthKey === monthKey)?.month ??
             sbaTorresBrasilMonthlySummaries.find((summary) => summary.monthKey === monthKey)?.month ??
+            wellnesstecMonthlySummaries.find((summary) => summary.monthKey === monthKey)?.month ??
             monthKey,
           startDate: sortedSnapshots[0]?.startDate ?? `${monthKey}-01`,
           endDate: sortedSnapshots[sortedSnapshots.length - 1]?.endDate ?? `${monthKey}-30`,

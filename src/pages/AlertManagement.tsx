@@ -4,12 +4,17 @@ import { AlertTriangle, CalendarClock, GripVertical, Wrench } from 'lucide-react
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { useScope } from '@/hooks/useScope'
 import { useAuth } from '@/hooks/useAuth'
-import { findEquipmentCatalogItem } from '@/lib/equipmentCatalog'
+import { equipmentCatalog, findEquipmentCatalogItem } from '@/lib/equipmentCatalog'
 import { loadEquipmentSchedules, loadKanbanStates, moveEquipmentKanbanCard } from '@/lib/maintenanceWorkflowStorage'
 import { mockAlarms } from '@/lib/mockData'
 import { loadAllPredictiveTasks, isPredictiveTaskScoped } from '@/lib/predictiveTaskStorage'
+import { sbaTorresBrasilSystems } from '@/lib/sbaTorresBrasilData'
+import { sbaTorresBrasilAlarms } from '@/lib/sbaTorresBrasilOperationalData'
+import { wellnesstecSystems } from '@/lib/wellnesstecData'
+import { wellnesstecAlarms } from '@/lib/wellnesstecOperationalData'
+import { westCorpSystems } from '@/lib/westCorpData'
 import { westCorpAlarms } from '@/lib/westCorpOperationalData'
-import { AlertKanbanColumn, Alarm, EquipmentHistoryTarget, MaintenanceSchedule, PredictiveTask } from '@/types'
+import { AlertKanbanColumn, Alarm, EquipmentHistoryTarget, MaintenanceSchedule, PredictiveTask, SiteSystemCatalog } from '@/types'
 
 type BoardCard = {
   equipment: EquipmentHistoryTarget
@@ -43,6 +48,68 @@ const COLUMN_META: Array<{
   },
 ]
 
+const ALL_STRUCTURED_SYSTEMS: SiteSystemCatalog[] = [
+  ...westCorpSystems,
+  ...sbaTorresBrasilSystems,
+  ...wellnesstecSystems,
+]
+
+function normalize(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+function slugify(value: string) {
+  return normalize(value)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function findSystemForAlarm(alarm: Alarm): SiteSystemCatalog | null {
+  const alarmEquipment = findEquipmentCatalogItem(alarm.equipmentId)
+  const normalizedArea = normalize(alarm.areaName ?? '')
+  const normalizedEquipName = normalize(alarmEquipment?.name ?? '')
+
+  for (const system of ALL_STRUCTURED_SYSTEMS) {
+    const normalizedSystemName = normalize(system.systemName)
+    if (alarmEquipment?.client && alarmEquipment.client !== system.client) continue
+    if (alarmEquipment?.siteId && alarmEquipment.siteId !== system.siteId) continue
+
+    if (normalizedArea && normalizedArea.includes(normalizedSystemName.slice(0, 8))) return system
+    if (normalizedEquipName.includes(normalizedSystemName.slice(0, 8))) return system
+    if (system.id === alarm.equipmentId) return system
+    if (system.outdoorUnits.some((odu) => normalize(odu).includes(normalizedEquipName.slice(0, 8)))) return system
+    if (system.id.includes(slugify(alarm.equipmentId))) return system
+    if (normalizedSystemName === normalizedArea) return system
+  }
+
+  for (const system of ALL_STRUCTURED_SYSTEMS) {
+    if (alarmEquipment?.client && alarmEquipment.client !== system.client) continue
+    if (alarmEquipment?.siteId && alarmEquipment.siteId !== system.siteId) continue
+    if (system.internalUnits.some((idu) => normalize(idu).includes(normalizedEquipName.slice(0, 8)))) return system
+  }
+
+  return null
+}
+
+function findUnitCatalogEntry(system: SiteSystemCatalog, unitName: string): EquipmentHistoryTarget | null {
+  const normalizedUnitName = normalize(unitName)
+  const direct = equipmentCatalog.find((entry) => {
+    if (entry.siteId !== system.siteId) return false
+    return normalize(entry.name).includes(normalizedUnitName.slice(0, 8)) || normalizedUnitName.includes(normalize(entry.name).slice(0, 8))
+  })
+  if (direct) return direct
+
+  const id = `${system.id}-${slugify(unitName)}`
+  const catalogById = equipmentCatalog.find((entry) => entry.id === id)
+  if (catalogById) return catalogById
+
+  return null
+}
+
 function isAlarmScoped(alarm: Alarm, selectedClient: string, selectedSite: string) {
   const alarmEquipment = findEquipmentCatalogItem(alarm.equipmentId)
   const matchesClient = selectedClient === 'all-clients' || alarm.clientName === selectedClient
@@ -52,13 +119,37 @@ function isAlarmScoped(alarm: Alarm, selectedClient: string, selectedSite: strin
 }
 
 function groupScopedAlarms(selectedClient: string, selectedSite: string) {
-  const alarms = [...mockAlarms, ...westCorpAlarms].filter((alarm) => isAlarmScoped(alarm, selectedClient, selectedSite))
+  const alarms = [...mockAlarms, ...westCorpAlarms, ...sbaTorresBrasilAlarms, ...wellnesstecAlarms].filter((alarm) =>
+    isAlarmScoped(alarm, selectedClient, selectedSite)
+  )
   const activeAlarms = alarms.filter((alarm) => alarm.status !== 'resolved')
 
   return activeAlarms.reduce<Map<string, Alarm[]>>((accumulator, alarm) => {
-    const current = accumulator.get(alarm.equipmentId) ?? []
-    current.push(alarm)
-    accumulator.set(alarm.equipmentId, current)
+    const push = (targetId: string) => {
+      const current = accumulator.get(targetId) ?? []
+      current.push(alarm)
+      accumulator.set(targetId, current)
+    }
+
+    push(alarm.equipmentId)
+
+    const alarmEquipment = findEquipmentCatalogItem(alarm.equipmentId)
+    if (alarmEquipment && (alarmEquipment.source === 'equipment' || alarmEquipment.source.endsWith('-unit'))) {
+      return accumulator
+    }
+
+    const system = findSystemForAlarm(alarm)
+    if (!system) return accumulator
+
+    const systemMatchesClient = selectedClient === 'all-clients' || system.client === selectedClient
+    const systemMatchesSite = selectedSite === 'all-sites' || system.siteId === selectedSite
+    if (!systemMatchesClient || !systemMatchesSite) return accumulator
+
+    system.internalUnits.forEach((unitName) => {
+      const unitEntry = findUnitCatalogEntry(system, unitName)
+      if (unitEntry) push(unitEntry.id)
+    })
+
     return accumulator
   }, new Map())
 }

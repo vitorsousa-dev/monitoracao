@@ -1,6 +1,8 @@
 import { mockEquipment } from '@/lib/mockData'
 import { SBA_TORRES_BRASIL_SITE_NAME } from '@/lib/sbaTorresBrasilData'
 import { sbaTorresBrasilMonthlyEquipmentSnapshots } from '@/lib/sbaTorresBrasilOperationalData'
+import { WELLNESSTEC_SITE_NAME } from '@/lib/wellnesstecData'
+import { wellnesstecMonthlyEquipmentSnapshots, wellnesstecUnitHealthRollups } from '@/lib/wellnesstecOperationalData'
 import { WEST_CORP_SITE_NAME } from '@/lib/westCorpData'
 import { westCorpMonthlyEquipmentSnapshots, westCorpUnitHealthRollups } from '@/lib/westCorpOperationalData'
 import { EquipmentHistoryTarget } from '@/types'
@@ -97,6 +99,58 @@ const latestSbaSystems = Array.from(
   }, new Map()).values()
 )
 
+const latestWellnesstecSystems = Array.from(
+  wellnesstecMonthlyEquipmentSnapshots.reduce<Map<string, EquipmentHistoryTarget>>((accumulator, snapshot) => {
+    const current = accumulator.get(snapshot.id)
+    if (!current || snapshot.endDate > current.lastUpdated) {
+      accumulator.set(snapshot.id, {
+        id: snapshot.id,
+        name: snapshot.name,
+        type: snapshot.type,
+        area: snapshot.area,
+        client: snapshot.client,
+        siteId: snapshot.siteId,
+        siteName: WELLNESSTEC_SITE_NAME,
+        health: snapshot.health,
+        availability: snapshot.availability,
+        comfort: snapshot.comfort,
+        performance: snapshot.performance,
+        status: snapshot.status,
+        mttr: snapshot.mttr,
+        totalOccurrences: snapshot.totalOccurrences,
+        criticalOccurrences: snapshot.criticalOccurrences,
+        moderateOccurrences: snapshot.moderateOccurrences,
+        informativeOccurrences: snapshot.informativeOccurrences,
+        lastUpdated: snapshot.endDate,
+        source: 'wellnesstec-system',
+      })
+    }
+    return accumulator
+  }, new Map()).values()
+)
+
+const wellnesstecUnits: EquipmentHistoryTarget[] = wellnesstecUnitHealthRollups.map((unit) => ({
+  id: unit.id,
+  name: toTitleCaseLabel(unit.unitName),
+  type: unit.unitType === 'ODU' ? 'ODU' : unit.unitType === 'SYSTEM' ? 'Sistema' : 'IDU',
+  area: unit.systemName,
+  client: 'Wellnesstec Tecnologia',
+  siteId: 'cresol-baser-01',
+  siteName: WELLNESSTEC_SITE_NAME,
+  health: unit.health,
+  availability: unit.availability,
+  comfort: unit.health,
+  performance: unit.availability,
+  status: unit.status,
+  mttr: unit.mttr,
+  totalOccurrences: unit.totalAlerts,
+  criticalOccurrences: unit.totalAlerts,
+  moderateOccurrences: 0,
+  informativeOccurrences: 0,
+  lastUpdated: unit.lastAlertAt.slice(0, 10),
+  source: 'wellnesstec-unit',
+}))
+
 const serasaEquipment: EquipmentHistoryTarget[] = mockEquipment.map((equipment) => ({
   ...equipment,
   siteId: equipment.siteId ?? (equipment.client === 'Serasa Experian' ? SERASA_SITE_ID : equipment.siteId),
@@ -112,6 +166,8 @@ export const equipmentCatalog: EquipmentHistoryTarget[] = [
   ...latestWestCorpSystems,
   ...westCorpUnits,
   ...latestSbaSystems,
+  ...latestWellnesstecSystems,
+  ...wellnesstecUnits,
 ]
 
 export function findEquipmentCatalogItem(id: string) {

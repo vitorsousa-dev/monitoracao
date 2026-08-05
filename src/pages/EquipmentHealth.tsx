@@ -18,6 +18,16 @@ import {
   sbaTorresBrasilUnitHealthRollups,
 } from '@/lib/sbaTorresBrasilOperationalData'
 import { buildEquipmentJustification } from '@/lib/utils'
+import {
+  WELLNESSTEC_CLIENT,
+  WELLNESSTEC_SITE_ID,
+  WELLNESSTEC_SITE_NAME,
+  wellnesstecSystems,
+} from '@/lib/wellnesstecData'
+import {
+  wellnesstecMonthlyEquipmentSnapshots,
+  wellnesstecUnitHealthRollups,
+} from '@/lib/wellnesstecOperationalData'
 import { westCorpUnitHealthRollups } from '@/lib/westCorpOperationalData'
 import { WEST_CORP_CLIENT, WEST_CORP_SITE_ID, WEST_CORP_SITE_NAME, westCorpSystems } from '@/lib/westCorpData'
 import { EquipmentMonthlySnapshot, SiteSystemCatalog } from '@/types'
@@ -77,6 +87,19 @@ const structuredSiteConfigs: StructuredSiteConfig[] = [
     emptyTelemetryMessage:
       'Sem telemetria operacional carregada para este sistema. As unidades internas cadastradas estao listadas abaixo.',
     unitRollups: sbaTorresBrasilUnitHealthRollups,
+  },
+  {
+    client: WELLNESSTEC_CLIENT,
+    siteId: WELLNESSTEC_SITE_ID,
+    siteName: WELLNESSTEC_SITE_NAME,
+    systems: wellnesstecSystems,
+    systemSnapshots: wellnesstecMonthlyEquipmentSnapshots,
+    description:
+      'Estrutura cadastrada por sistema, com ODU Master/Slave e unidades internas individualizadas conforme informado. Telemetria de julho/2026 carregada para os sistemas e equipamentos com ocorrencias reportadas.',
+    telemetryBadge: 'Telemetria de julho/2026 carregada para os sistemas e equipamentos enviados.',
+    emptyTelemetryMessage:
+      'Sem telemetria operacional carregada para este sistema. As unidades internas cadastradas estao listadas abaixo.',
+    unitRollups: wellnesstecUnitHealthRollups,
   },
 ]
 
