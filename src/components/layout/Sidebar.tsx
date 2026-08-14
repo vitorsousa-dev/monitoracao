@@ -8,12 +8,10 @@ import {
   Wallet,
   TrendingUp,
   Droplets,
-  Users,
   KanbanSquare,
   Boxes
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useAuth } from '@/hooks/useAuth'
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -24,15 +22,11 @@ const navItems = [
   { path: '/financial', label: 'Gestão Financeira', icon: Wallet },
   { path: '/predictive', label: 'Manutenção Preditiva', icon: TrendingUp },
   { path: '/sustainability', label: 'Sustentabilidade', icon: Droplets },
-  { path: '/users', label: 'Usuários', icon: Users, adminOnly: true },
   { path: '/updates', label: 'Atualizações Semanais', icon: Calendar },
   { path: '/settings', label: 'Configurações', icon: Settings },
 ]
 
 export function Sidebar() {
-  const { canManageUsers } = useAuth()
-  const visibleNavItems = navItems.filter((item) => !item.adminOnly || canManageUsers)
-
   return (
     <aside className="w-64 bg-white border-r border-gray-200 min-h-screen flex flex-col">
       <div className="border-b border-gray-200 p-6">
@@ -46,7 +40,7 @@ export function Sidebar() {
       </div>
       
       <nav className="flex-1 p-4 space-y-2">
-        {visibleNavItems.map((item) => (
+        {navItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
