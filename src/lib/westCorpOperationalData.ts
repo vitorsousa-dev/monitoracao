@@ -2,18 +2,6 @@ import { Alarm, EquipmentMonthlySnapshot, MonthlySummary, SiteMonthlySnapshot } 
 import { WEST_CORP_CLIENT, WEST_CORP_SITE_ID, WEST_CORP_SITE_NAME, westCorpSite, westCorpSystems } from './westCorpData'
 import { getHealthStatusText } from './utils'
 
-type RawWestCorpLog = {
-  date: string
-  time: string
-  unitName: string
-  systemName: string
-  description: string
-  errorCode: string
-  errorDescription: string
-  alertType: string
-  priority: 'High' | 'Medium' | 'Low'
-}
-
 export interface WestCorpUnitHealthRollup {
   id: string
   unitName: string
@@ -28,577 +16,251 @@ export interface WestCorpUnitHealthRollup {
   lastAlertAt: string
 }
 
-const RAW_LOG_LINES = `
-30/05/26   22:39 6P-D-MAIN 06P-D_1 Outdoor error 116 Outdoor Error High
-30/05/26   22:37 6P-D-MAIN 06P-D_1 Outdoor error 21 Outdoor Error High
-30/05/26   17:15 NOBREAK_4P-C (035) 04P-C_7 Indoor error 10 Indoor unit BLDC fan motor communications error. Indoor Error High
-30/05/26   17:05 6P-D-MAIN 06P-D_1 Outdoor error 116 Outdoor Error High
-30/06/26   23:45 ODU L4.D00.0D80 09P-D_D(13) Outdoor error 53 Outdoor Error High
-30/06/26   23:43 ODU L4.C00.0D80 9P-B_C(12) Outdoor error 53 Outdoor Error High
-30/06/26   22:13 ODU L4.C00.0D80 9P-B_C(12) Outdoor error 53 Outdoor Error High
-30/06/26   20:27 ODU L4.D00.0D80 09P-D_D(13) Outdoor error 53 Outdoor Error High
-30/06/26   18:01 ENEL 5_5P-C (040) 05P-C_9 Indoor error 42 Indoor Error High
-30/06/26   18:01 ENEL 7_5P-C (041) 05P-C_9 Indoor error 42 Indoor Error High
-30/06/26   18:01 ENEL 4_5P-C (042) 05P-C_9 Indoor error 42 Indoor Error High
-30/06/26   18:01 ENEL 6_5P-C (043) 05P-C_9 Indoor error 42 Indoor Error High
-30/06/26   18:01 ENEL 3_5P-C (044) 05P-C_9 Indoor error 42 Indoor Error High
-30/06/26   18:01 WC MASC_5P-C (045) 05P-C_9 Indoor error 42 Indoor Error High
-30/06/26   18:01 ENEL 1_5P-C (046) 05P-C_9 Indoor error 42 Indoor Error High
-30/06/26   18:01 ENEL 2_5P-C (047) 05P-C_9 Indoor error 42 Indoor Error High
-30/06/26   17:28 ODU L6.900.1235 05P-C_9 Outdoor error 42 Outdoor Error High
-30/06/26   16:45 ODU L6.C00.1235 07P-A_C(12) Outdoor error 21 Outdoor Error High
-30/06/26   13:09 6P-D-MAIN 06P-D_1 Outdoor error 77 Outdoor Error High
-30/06/26   12:05 ODU L4.800.1235 13P-A_4_8 Outdoor error 21 Outdoor Error High
-30/06/26   11:05 ODU L6.400.0D80 11P-B_4 Outdoor error 21 Outdoor Error High
-30/06/26   10:09 multiple 05P-C_9 Units disconnected Units disconnected High
-30/06/26   10:09 multiple 05P-C_9 Units disconnected Units disconnected High
-30/06/26   09:19 ODU L6.900.1235 05P-C_9 Outdoor error 53 Outdoor Error High
-30/06/26   06:11 ODU L4.600.0D80 03P-D_6 Outdoor error 26 Outdoor Error High
-30/06/26   05:35 NOBREAK_4P-C (035) 04P-C_7 Indoor error 10 Indoor unit BLDC fan motor communications error. Indoor Error High
-30/06/26   00:40 L4.09E.0166_11P-A (09E) 11P-A_4_4 Indoor error 2 Indoor unit inlet pipe temperature sensor communication error. Indoor Error High
-30/06/26   00:00 L4.09E.0166_11P-A (09E) 11P-A_4_4 Indoor error 2 Indoor unit inlet pipe temperature sensor communication error. Indoor Error High
-29/06/26   22:10 L4.09E.0166_11P-A (09E) 11P-A_4_4 Indoor error 2 Indoor unit inlet pipe temperature sensor communication error. Indoor Error High
-29/06/26   18:05 ODU L6.B00.1235 06P-C_B(11) Outdoor error 53 Outdoor Error High
-29/06/26   17:09 6P-D-MAIN 06P-D_1 Outdoor error 77 Outdoor Error High
-29/06/26   15:12 6P-D-MAIN 06P-D_1 Outdoor error 116 Outdoor Error High
-29/06/26   14:17 6P-D-MAIN 06P-D_1 Outdoor error 77 Outdoor Error High
-29/06/26   13:25 L4.09E.0166_11P-A (09E) 11P-A_4_4 Indoor error 2 Indoor unit inlet pipe temperature sensor communication error. Indoor Error High
-29/06/26   12:01 L4.0A0.0166_11P-C (0A0) 11P-C_4_5 Indoor error 53 Indoor Error High
-29/06/26   12:01 L4.0A2.0166_11P-C (0A2) 11P-C_4_5 Indoor error 53 Indoor Error High
-29/06/26   12:01 L4.0A3.0166_11P-C (0A3) 11P-C_4_5 Indoor error 53 Indoor Error High
-29/06/26   12:01 L4.0A5.0166_11P-C (0A5) 11P-C_4_5 Indoor error 53 Indoor Error High
-29/06/26   11:57 11P-C_MAIN 11P-C_4_5 Outdoor error 53 Outdoor Error High
-29/06/26   11:30 05_11P-B (094) 11P-B_4 Indoor error 151 Indoor Error High
-29/06/26   11:30 08_11P-B (097) 11P-B_4 Indoor error 151 Indoor Error High
-29/06/26   11:30 02_11P-B (091) 11P-B_4 Indoor error 151 Indoor Error High
-29/06/26   11:30 03_11P-B (092) 11P-B_4 Indoor error 151 Indoor Error High
-29/06/26   11:30 07_11P-B (096) 11P-B_4 Indoor error 151 Indoor Error High
-29/06/26   11:30 01_11P-B (090) 11P-B_4 Indoor error 151 Indoor Error High
-29/06/26   11:30 04_11P-B (093) 11P-B_4 Indoor error 151 Indoor Error High
-29/06/26   11:30 06_11P-B (095) 11P-B_4 Indoor error 151 Indoor Error High
-29/06/26   11:30 ODU L6.400.0D80 11P-B_4 Outdoor error 151 Outdoor Error High
-29/06/26   10:04 ODU L4.F00.1235 16P-C_4_F Outdoor error 21 Outdoor Error High
-29/06/26   05:40 L4.09E.0166_11P-A (09E) 11P-A_4_4 Indoor error 2 Indoor unit inlet pipe temperature sensor communication error. Indoor Error High
-29/06/26   03:35 L4.09E.0166_11P-A (09E) 11P-A_4_4 Indoor error 2 Indoor unit inlet pipe temperature sensor communication error. Indoor Error High
-29/06/26   03:15 L4.09E.0166_11P-A (09E) 11P-A_4_4 Indoor error 2 Indoor unit inlet pipe temperature sensor communication error. Indoor Error High
-28/06/26   17:08 ODU L4.700.0D80 03P-B_7 Outdoor error 21 Outdoor Error High
-28/06/26   16:35 01_6P-C (050) 06P-C_B(11) Indoor error 53 Indoor Error High
-28/06/26   16:35 02_6P-C (051) 06P-C_B(11) Indoor error 53 Indoor Error High
-28/06/26   16:35 04_6P-C (053) 06P-C_B(11) Indoor error 53 Indoor Error High
-28/06/26   16:35 05_6P-C (054) 06P-C_B(11) Indoor error 53 Indoor Error High
-28/06/26   16:35 06_6P-C (055) 06P-C_B(11) Indoor error 53 Indoor Error High
-28/06/26   16:35 07_6P-C (056) 06P-C_B(11) Indoor error 53 Indoor Error High
-28/06/26   16:35 08_6P-C (057) 06P-C_B(11) Indoor error 53 Indoor Error High
-28/06/26   14:20 6P-D-MAIN 06P-D_1 Outdoor error 77 Outdoor Error High
-28/06/26   13:55 L4.09E.0166_11P-A (09E) 11P-A_4_4 Indoor error 2 Indoor unit inlet pipe temperature sensor communication error. Indoor Error High
-28/06/26   08:35 ESCRITÓRIO 1_16P-D (0FE) 16P-D_F(15) Units disconnected Units disconnected High
-28/06/26   07:55 NOBREAK_4P-C (035) 04P-C_7 Indoor error 10 Indoor unit BLDC fan motor communications error. Indoor Error High
-28/06/26   07:15 01_7P-B (060) 07P-B_2 Indoor error 53 Indoor Error High
-28/06/26   07:15 03_7P-B (062) 07P-B_2 Indoor error 53 Indoor Error High
-28/06/26   07:15 04_7P-B (063) 07P-B_2 Indoor error 53 Indoor Error High
-28/06/26   07:15 06_7P-B (065) 07P-B_2 Indoor error 53 Indoor Error High
-28/06/26   07:15 08_7P-B (067) 07P-B_2 Indoor error 53 Indoor Error High
-28/06/26   07:15 L6.06A.0165_7P-D (06A) 07P-D_3 Indoor error 53 Indoor Error High
-28/06/26   07:15 L6.06B.0165_7P-D (06B) 07P-D_3 Indoor error 53 Indoor Error High
-28/06/26   07:15 L6.06C.0165_7P-D (06C) 07P-D_3 Indoor error 53 Indoor Error High
-28/06/26   07:15 L6.06E.0165_7P-D (06E) 07P-D_3 Indoor error 53 Indoor Error High
-28/06/26   07:15 L6.06F.0165_7P-D (06F) 07P-D_3 Indoor error 53 Indoor Error High
-28/06/26   07:15 02_7P-B (061) 07P-B_2 Indoor error 53 Indoor Error High
-28/06/26   07:15 05_7P-B (064) 07P-B_2 Indoor error 53 Indoor Error High
-28/06/26   07:15 07_7P-B (066) 07P-B_2 Indoor error 53 Indoor Error High
-28/06/26   07:15 L6.068.01650_7P-D (068) 07P-D_3 Indoor error 53 Indoor Error High
-28/06/26   07:15 L6.069.0165_7P-D (069) 07P-D_3 Indoor error 53 Indoor Error High
-28/06/26   07:15 L6.06D.0165_7P-D (06D) 07P-D_3 Indoor error 53 Indoor Error High
-28/06/26   07:13 ODU L6.300.0D80 07P-D_3 Outdoor error 53 Outdoor Error High
-28/06/26   07:13 ODU L6.200.0D80 07P-B_2 Outdoor error 53 Outdoor Error High
-28/06/26   06:55 01_10P-D (000) 10P-D_F(15) Indoor error 53 Indoor Error High
-28/06/26   06:55 L4.001.0D80_1P-B (001) 01P-B_0 Indoor error 53 Indoor Error High
-28/06/26   06:55 02_10P-D (098) 10P-D_F(15) Indoor error 53 Indoor Error High
-28/06/26   06:55 03_10P-D (099) 10P-D_F(15) Indoor error 53 Indoor Error High
-28/06/26   06:55 04_10P-D (09A) 10P-D_F(15) Indoor error 53 Indoor Error High
-28/06/26   06:55 05_10P-D (09B) 10P-D_F(15) Indoor error 53 Indoor Error High
-28/06/26   06:55 06_10P-D (09C) 10P-D_F(15) Indoor error 53 Indoor Error High
-28/06/26   06:55 07_10P-D (09D) 10P-D_F(15) Indoor error 53 Indoor Error High
-28/06/26   06:55 08_10P-D (09E) 10P-D_F(15) Indoor error 53 Indoor Error High
-28/06/26   06:55 09_10P-D (09F) 10P-D_F(15) Indoor error 53 Indoor Error High
-28/06/26   06:55 01_10P-B (0A0) 10P-B_E(14) Indoor error 53 Indoor Error High
-28/06/26   06:55 02_10P-B (0A1) 10P-B_E(14) Indoor error 53 Indoor Error High
-28/06/26   06:55 03_10P-B (0A2) 10P-B_E(14) Indoor error 53 Indoor Error High
-28/06/26   06:55 04_10P-B (0A3) 10P-B_E(14) Indoor error 53 Indoor Error High
-28/06/26   06:55 05_10P-B (0A4) 10P-B_E(14) Indoor error 53 Indoor Error High
-28/06/26   06:55 06_10P-B (0A5) 10P-B_E(14) Indoor error 53 Indoor Error High
-28/06/26   06:55 07_10P-B (0A6) 10P-B_E(14) Indoor error 53 Indoor Error High
-28/06/26   06:55 08_10P-B (0A7) 10P-B_E(14) Indoor error 53 Indoor Error High
-28/06/26   06:54 ODU L4.F00.0D80 10P-D_F(15) Outdoor error 53 Outdoor Error High
-28/06/26   06:54 ODU L4.E00.0D80 10P-B_E(14) Outdoor error 53 Outdoor Error High
-28/06/26   06:50 L4.019.1235_CPD_16P-C (019) 16P-C_4_F Indoor error 151 Indoor Error High
-28/06/26   06:50 DIRETORIA_16P-C (0F0) 16P-C_4_F Indoor error 151 Indoor Error High
-28/06/26   06:50 ESCRITÓRIO 4_16P-C (0F1) 16P-C_4_F Indoor error 151 Indoor Error High
-28/06/26   06:50 ESCRITÓRIO 2_16P-C (0F2) 16P-C_4_F Indoor error 151 Indoor Error High
-28/06/26   06:50 ESCRITÓRIO 1_16P-C (0F3) 16P-C_4_F Indoor error 151 Indoor Error High
-28/06/26   06:50 ESCRITÓRIO 3_16P-C (0F4) 16P-C_4_F Indoor error 151 Indoor Error High
-28/06/26   06:50 DEPÓSITO_16P-C (0F5) 16P-C_4_F Indoor error 151 Indoor Error High
-28/06/26   06:50 ESCRITÓRIO 5_16P-C (0F6) 16P-C_4_F Indoor error 151 Indoor Error High
-28/06/26   06:50 ESCRITÓRIO 6_16P-C (0F7) 16P-C_4_F Indoor error 151 Indoor Error High
-28/06/26   06:49 15-P-C_MAIN 15-P-C_D(13) Outdoor error 45 Outdoor Error High
-28/06/26   06:49 14P-A_MAIN 14P-A_A(10) Outdoor error 53 Outdoor Error High
-28/06/26   06:49 ODU L6.B00.0D80 14P-D_B(11) VAGO Outdoor error 53 Outdoor Error High
-28/06/26   06:49 ODU L6.A00.0D80 14P-B_A(10) VAGO Outdoor error 53 Outdoor Error High
-28/06/26   06:49 6P-D-MAIN 06P-D_1 Outdoor error 53 Outdoor Error High
-28/06/26   06:49 ODU L4.200.0D80 02P-B_2 Outdoor error 53 Outdoor Error High
-28/06/26   06:49 ODU L6.B00.1235 06P-C_B(11) Outdoor error 53 Outdoor Error High
-28/06/26   06:49 ODU L4.F00.1235 16P-C_4_F Outdoor error 151 Outdoor Error High
-28/06/26   06:49 ODU L6.900.1235 05P-C_9 Outdoor error 53 Outdoor Error High
-28/06/26   06:49 02P-A_MAIN 02P-A_2 Outdoor error 53 Outdoor Error High
-28/06/26   06:48 ODU L4.D00.0D80 09P-D_D(13) Outdoor error 53 Outdoor Error High
-28/06/26   06:48 ODU L4.C00.0D80 9P-B_C(12) Outdoor error 53 Outdoor Error High
-28/06/26   06:48 01P-B_MAIN 01P-B_0 Outdoor error 53 Outdoor Error High
-28/06/26   06:48 ODU L4.700.0D80 03P-B_7 Outdoor error 53 Outdoor Error High
-28/06/26   06:48 ODU L4.600.0D80 03P-D_6 Outdoor error 53 Outdoor Error High
-28/06/26   06:48 ODU L4.300.0D80 02P-D_3 Outdoor error 53 Outdoor Error High
-28/06/26   06:48 10P-C_MAIN 10P-C_4_3 Outdoor error 53 Outdoor Error High
-28/06/26   06:48 10P-A_MAIN 10P-A_4_2 Outdoor error 53 Outdoor Error High
-28/06/26   06:45 L6.0E4_15P-C (0E4) 15-P-C_D(13) Indoor error 45 Indoor Error High
-28/06/26   06:45 L6.0E5_15P-C (0E5) 15-P-C_D(13) Indoor error 45 Indoor Error High
-28/06/26   06:45 L6.0E6_15P-C (0E6) 15-P-C_D(13) Indoor error 45 Indoor Error High
-28/06/26   06:45 L6.0E7_15P-C (0E7) 15-P-C_D(13) Indoor error 45 Indoor Error High
-28/06/26   06:45 L4.09E.0166_11P-A (09E) 11P-A_4_4 Indoor error 2 Indoor unit inlet pipe temperature sensor communication error. Indoor Error High
-28/06/26   06:45 ESCRITÓRIO 1_1P-D (00A) 01P-D_1 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-28/06/26   06:45 ESCRITÓRIO 3_1P-D (00C) 01P-D_1 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-28/06/26   06:45 SALA SOM_3P-B (025) 03P-B_7 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-27/06/26   19:58 multiple multiple Units disconnected Units disconnected High
-27/06/26   19:58 multiple multiple Units disconnected Units disconnected High
-27/06/26   19:58 multiple multiple Units disconnected Units disconnected High
-27/06/26   19:58 multiple multiple Units disconnected Units disconnected High
-27/06/26   19:57 multiple 15-P-C_D(13) Units disconnected Units disconnected High
-27/06/26   19:57 multiple multiple Units disconnected Units disconnected High
-27/06/26   19:16 ODU L4.B00.0D80 08P-D_B(11) Outdoor error 24 Outdoor Error High
-27/06/26   19:15 ENEL 5_5P-C (040) 05P-C_9 Indoor error 53 Indoor Error High
-27/06/26   19:15 ENEL 7_5P-C (041) 05P-C_9 Indoor error 53 Indoor Error High
-27/06/26   19:15 ENEL 4_5P-C (042) 05P-C_9 Indoor error 53 Indoor Error High
-27/06/26   19:15 ENEL 6_5P-C (043) 05P-C_9 Indoor error 53 Indoor Error High
-27/06/26   19:15 ENEL 3_5P-C (044) 05P-C_9 Indoor error 53 Indoor Error High
-27/06/26   19:15 WC MASC_5P-C (045) 05P-C_9 Indoor error 53 Indoor Error High
-27/06/26   19:15 ENEL 1_5P-C (046) 05P-C_9 Indoor error 53 Indoor Error High
-27/06/26   19:15 ENEL 2_5P-C (047) 05P-C_9 Indoor error 53 Indoor Error High
-27/06/26   19:15 REFEITÓRIO_5P-A (048) 05P-A_8 Indoor error 53 Indoor Error High
-27/06/26   19:15 CLARO GED 2_5P-A (049) 05P-A_8 Indoor error 53 Indoor Error High
-27/06/26   19:15 CLARO GED 3_5P-A (04A) 05P-A_8 Indoor error 53 Indoor Error High
-27/06/26   19:15 CLARO GED 1_5P-A (04B) 05P-A_8 Indoor error 53 Indoor Error High
-27/06/26   19:15 CREA 2_5P-A (04C) 05P-A_8 Indoor error 53 Indoor Error High
-27/06/26   19:15 WC FEMININO_5P-A (04D) 05P-A_8 Indoor error 53 Indoor Error High
-27/06/26   19:15 QUALIDADE_5P-A (04E) 05P-A_8 Indoor error 53 Indoor Error High
-27/06/26   19:15 CREA 1_5P-A (04F) 05P-A_8 Indoor error 53 Indoor Error High
-27/06/26   19:12 ODU L6.800.1235 05P-A_8 Outdoor error 53 Outdoor Error High
-27/06/26   19:11 ODU L4.900.0D80 05P-D_9 Outdoor error 53 Outdoor Error High
-27/06/26   19:11 ODU L4.800.0D80 05P-B_8 Outdoor error 53 Outdoor Error High
-27/06/26   19:10 DIRETORIA_5P-B (015) 05P-B_8 Indoor error 53 Indoor Error High
-27/06/26   19:10 REUNIÃO_5P-D (016) 05P-D_9 Indoor error 53 Indoor Error High
-27/06/26   19:10 PRESIDÊNCIA_5P-B (040) 05P-B_8 Indoor error 53 Indoor Error High
-27/06/26   19:10 COMERCIAL_5P-B (041) 05P-B_8 Indoor error 53 Indoor Error High
-27/06/26   19:10 STAFF 2_5P-B (042) 05P-B_8 Indoor error 53 Indoor Error High
-27/06/26   19:10 RECEPÇÃO_5P-B (043) 05P-B_8 Indoor error 53 Indoor Error High
-27/06/26   19:10 STAFF 1_5P-B (044) 05P-B_8 Indoor error 53 Indoor Error High
-27/06/26   19:10 NOBREAK_5P-B (045) 05P-B_8 Indoor error 53 Indoor Error High
-27/06/26   19:10 STAFF 4_5P-B (046) 05P-B_8 Indoor error 53 Indoor Error High
-27/06/26   19:10 STAFF 3_5P-B (047) 05P-B_8 Indoor error 53 Indoor Error High
-27/06/26   19:10 REUNIÃO DIRETORIA_5P-D (048) 05P-D_9 Indoor error 53 Indoor Error High
-27/06/26   19:10 CLARO 1_5P-D (049) 05P-D_9 Indoor error 53 Indoor Error High
-27/06/26   19:10 CLARO 2_5P-D (04A) 05P-D_9 Indoor error 53 Indoor Error High
-27/06/26   19:10 CLARO 3_5P-D (04B) 05P-D_9 Indoor error 53 Indoor Error High
-27/06/26   19:10 CLARO 4_5P-D (04C) 05P-D_9 Indoor error 53 Indoor Error High
-27/06/26   19:10 CLARO IDF_5P-D (04D) 05P-D_9 Indoor error 53 Indoor Error High
-27/06/26   19:10 CLARO 6_5P-D (04E) 05P-D_9 Indoor error 53 Indoor Error High
-27/06/26   19:10 CLARO 5_5P-D (04F) 05P-D_9 Indoor error 53 Indoor Error High
-27/06/26   19:05 L6.0E5_15P-C (0E5) 15-P-C_D(13) Indoor error 45 Indoor Error High
-27/06/26   19:05 L6.0E6_15P-C (0E6) 15-P-C_D(13) Indoor error 45 Indoor Error High
-27/06/26   19:05 L6.0E7_15P-C (0E7) 15-P-C_D(13) Indoor error 45 Indoor Error High
-27/06/26   19:04 multiple multiple Units disconnected Units disconnected High
-27/06/26   19:03 ODU L6.B00.1235 06P-C_B(11) Outdoor error 53 Outdoor Error High
-27/06/26   19:01 multiple multiple Units disconnected Units disconnected High
-27/06/26   19:01 multiple 15-P-C_D(13) Units disconnected Units disconnected High
-27/06/26   19:01 multiple multiple Units disconnected Units disconnected High
-27/06/26   18:30 08_7P-B (067) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   18:30 L6.06A.0165_7P-D (06A) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   18:30 L6.06B.0165_7P-D (06B) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   18:30 07_7P-B (066) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   18:30 L6.068.01650_7P-D (068) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   18:30 L6.069.0165_7P-D (069) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   18:25 01_7P-B (060) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   18:25 04_7P-B (063) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   18:25 06_7P-B (065) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   18:25 L6.06E.0165_7P-D (06E) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   18:25 05_7P-B (064) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   18:25 L6.06D.0165_7P-D (06D) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   18:22 ODU L6.200.0D80 07P-B_2 Outdoor error 53 Outdoor Error High
-27/06/26   18:21 ODU L6.300.0D80 07P-D_3 Outdoor error 53 Outdoor Error High
-27/06/26   18:05 01_7P-B (060) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   18:05 03_7P-B (062) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   18:05 04_7P-B (063) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   18:05 06_7P-B (065) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   18:05 08_7P-B (067) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   18:05 L6.06A.0165_7P-D (06A) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   18:05 L6.06B.0165_7P-D (06B) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   18:05 L6.06C.0165_7P-D (06C) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   18:05 L6.06E.0165_7P-D (06E) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   18:05 L6.06F.0165_7P-D (06F) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   18:05 02_7P-B (061) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   18:05 05_7P-B (064) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   18:05 07_7P-B (066) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   18:05 L6.068.01650_7P-D (068) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   18:05 L6.069.0165_7P-D (069) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   18:05 L6.06D.0165_7P-D (06D) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   18:04 ODU L6.300.0D80 07P-D_3 Outdoor error 53 Outdoor Error High
-27/06/26   18:04 ODU L6.200.0D80 07P-B_2 Outdoor error 53 Outdoor Error High
-27/06/26   16:45 01_7P-B (060) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   16:45 03_7P-B (062) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   16:45 04_7P-B (063) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   16:45 06_7P-B (065) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   16:45 08_7P-B (067) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   16:45 L6.06A.0165_7P-D (06A) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   16:45 L6.06B.0165_7P-D (06B) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   16:45 L6.06C.0165_7P-D (06C) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   16:45 L6.06E.0165_7P-D (06E) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   16:45 L6.06F.0165_7P-D (06F) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   16:45 05_7P-B (064) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   16:45 07_7P-B (066) 07P-B_2 Indoor error 53 Indoor Error High
-27/06/26   16:45 L6.068.01650_7P-D (068) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   16:45 L6.069.0165_7P-D (069) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   16:45 L6.06D.0165_7P-D (06D) 07P-D_3 Indoor error 53 Indoor Error High
-27/06/26   16:44 ODU L6.300.0D80 07P-D_3 Outdoor error 53 Outdoor Error High
-27/06/26   16:44 ODU L6.200.0D80 07P-B_2 Outdoor error 53 Outdoor Error High
-27/06/26   12:10 ODU L4.F00.0D80 10P-D_F(15) Outdoor error 53 Outdoor Error High
-27/06/26   11:55 L4.002.1235_10P-A (002) 10P-A_4_2 Indoor error 53 Indoor Error High
-27/06/26   11:55 L4.090.0166_10P-C (090) 10P-C_4_3 Indoor error 53 Indoor Error High
-27/06/26   11:55 L4.091.0166_10P-C (091) 10P-C_4_3 Indoor error 53 Indoor Error High
-27/06/26   11:55 L4.092.0166_10P-C (092) 10P-C_4_3 Indoor error 53 Indoor Error High
-27/06/26   11:55 L4.093.1235_10P-C (093) 10P-C_4_3 Indoor error 53 Indoor Error High
-27/06/26   11:55 L4.094.1235_10P-C (094) 10P-C_4_3 Indoor error 53 Indoor Error High
-27/06/26   11:55 L4.095.1235_10P-C (095) 10P-C_4_3 Indoor error 53 Indoor Error High
-27/06/26   11:55 L4.096.1235_10P-C (096) 10P-C_4_3 Indoor error 53 Indoor Error High
-27/06/26   11:55 L4.0A8.0166_10P-A (0A8) 10P-A_4_2 Indoor error 53 Indoor Error High
-27/06/26   11:55 L4.0A9.0166_10P-A (0A9) 10P-A_4_2 Indoor error 53 Indoor Error High
-27/06/26   11:55 L4.0AA.0166_10P-A (0AA) 10P-A_4_2 Indoor error 53 Indoor Error High
-27/06/26   11:55 L4.0AB.0166_10P-A (0AB) 10P-A_4_2 Indoor error 53 Indoor Error High
-27/06/26   11:55 L4.0AC.0166_10P-A (0AC) 10P-A_4_2 Indoor error 53 Indoor Error High
-27/06/26   11:55 L4.0AD.0166_10P-A (0AD) 10P-A_4_2 Indoor error 53 Indoor Error High
-27/06/26   11:55 L4.0AE.0166_10P-A (0AE) 10P-A_4_2 Indoor error 53 Indoor Error High
-27/06/26   11:55 L4.0AF.0166_10P-A (0AF) 10P-A_4_2 Indoor error 53 Indoor Error High
-27/06/26   11:54 10P-C_MAIN 10P-C_4_3 Outdoor error 53 Outdoor Error High
-27/06/26   11:54 10P-A_MAIN 10P-A_4_2 Outdoor error 53 Outdoor Error High
-27/06/26   11:45 01_10P-D (000) 10P-D_F(15) Indoor error 53 Indoor Error High
-27/06/26   11:45 L4.001.0D80_1P-B (001) 01P-B_0 Indoor error 53 Indoor Error High
-27/06/26   11:45 02_10P-D (098) 10P-D_F(15) Indoor error 53 Indoor Error High
-27/06/26   11:45 03_10P-D (099) 10P-D_F(15) Indoor error 53 Indoor Error High
-27/06/26   11:45 04_10P-D (09A) 10P-D_F(15) Indoor error 53 Indoor Error High
-27/06/26   11:45 05_10P-D (09B) 10P-D_F(15) Indoor error 53 Indoor Error High
-27/06/26   11:45 06_10P-D (09C) 10P-D_F(15) Indoor error 53 Indoor Error High
-27/06/26   11:45 07_10P-D (09D) 10P-D_F(15) Indoor error 53 Indoor Error High
-27/06/26   11:45 08_10P-D (09E) 10P-D_F(15) Indoor error 53 Indoor Error High
-27/06/26   11:45 09_10P-D (09F) 10P-D_F(15) Indoor error 53 Indoor Error High
-27/06/26   11:45 01_10P-B (0A0) 10P-B_E(14) Indoor error 53 Indoor Error High
-27/06/26   11:45 02_10P-B (0A1) 10P-B_E(14) Indoor error 53 Indoor Error High
-27/06/26   11:45 03_10P-B (0A2) 10P-B_E(14) Indoor error 53 Indoor Error High
-27/06/26   11:45 04_10P-B (0A3) 10P-B_E(14) Indoor error 53 Indoor Error High
-27/06/26   11:45 05_10P-B (0A4) 10P-B_E(14) Indoor error 53 Indoor Error High
-27/06/26   11:45 06_10P-B (0A5) 10P-B_E(14) Indoor error 53 Indoor Error High
-27/06/26   11:45 07_10P-B (0A6) 10P-B_E(14) Indoor error 53 Indoor Error High
-27/06/26   11:45 08_10P-B (0A7) 10P-B_E(14) Indoor error 53 Indoor Error High
-27/06/26   11:45 ODU L4.F00.0D80 10P-D_F(15) Outdoor error 53 Outdoor Error High
-27/06/26   11:45 ODU L4.E00.0D80 10P-B_E(14) Outdoor error 53 Outdoor Error High
-27/06/26   08:30 ÁREA ROTATIVA_17_2P-B (017) 02P-B_2 Indoor error 53 Indoor Error High
-27/06/26   08:30 ÁREA ROTATIVA_18_2P-B (018) 02P-B_2 Indoor error 53 Indoor Error High
-27/06/26   08:30 INOVAÇÃO_19_2P-B (019) 02P-B_2 Indoor error 53 Indoor Error High
-27/06/26   08:30 SL DE REUNIÃO_1A_2P-B (01A) 02P-B_2 Indoor error 53 Indoor Error High
-27/06/26   08:30 RECEPÇÃO_1B_2P-B (01B) 02P-B_2 Indoor error 53 Indoor Error High
-27/06/26   08:30 ÁREA ROTATIVA_1C_2P-B (01C) 02P-B_2 Indoor error 53 Indoor Error High
-27/06/26   08:30 GSC_1D_2P-B (01D) 02P-B_2 Indoor error 53 Indoor Error High
-27/06/26   08:30 GSC_1E_2P-B (01E) 02P-B_2 Indoor error 53 Indoor Error High
-27/06/26   08:30 CPD_1F_2P-B (01F) 02P-B_2 Indoor error 53 Indoor Error High
-27/06/26   08:27 ODU L4.200.0D80 02P-B_2 Outdoor error 53 Outdoor Error High
-27/06/26   08:26 ODU L4.300.0D80 02P-D_3 Outdoor error 53 Outdoor Error High
-27/06/26   08:26 02P-A_MAIN 02P-A_2 Outdoor error 53 Outdoor Error High
-27/06/26   08:25 GSC_18_2P-A (018) 01P-A_0 Indoor error 53 Indoor Error High
-27/06/26   08:25 ENGENHARIA_19_2P-A (019) 02P-A_2 Indoor error 53 Indoor Error High
-27/06/26   08:25 ENGENHARIA_1A_2P-A (01A) 02P-A_2 Indoor error 53 Indoor Error High
-27/06/26   08:25 ENGENHARIA_1B _2P-A (01B) 02P-A_2 Indoor error 53 Indoor Error High
-27/06/26   08:25 ENGENHARIA_1C_2P-A (01C) 02P-A_2 Indoor error 53 Indoor Error High
-27/06/26   08:25 ENGENHARIA_1D__2P-A (01D) 02P-A_2 Indoor error 53 Indoor Error High
-27/06/26   08:25 ENGENHARIA_1E_2P-A (01E) 02P-A_2 Indoor error 53 Indoor Error High
-27/06/26   08:25 ENGENHARIA_1F_2P-A (01F) 02P-A_2 Indoor error 53 Indoor Error High
-27/06/26   08:25 SL DE TREINAMENTO_50_2P-D (050) 02P-D_3 Indoor error 53 Indoor Error High
-27/06/26   08:25 LAB_51_2P-D (051) 02P-D_3 Indoor error 53 Indoor Error High
-27/06/26   08:25 DESCOMPRESSÃO_52_2P-D (052) 02P-D_3 Indoor error 53 Indoor Error High
-27/06/26   08:25 DESCOMPRESSÃO_53_2P-D (053) 02P-D_3 Indoor error 53 Indoor Error High
-27/06/26   08:25 DESCOMPRESSÃO_54_2P-D (054) 02P-D_3 Indoor error 53 Indoor Error High
-27/06/26   08:25 SL DE REUNIÃO_55_2P-D (055) 02P-D_3 Indoor error 53 Indoor Error High
-27/06/26   08:25 RECEPÇÃO_56_2P-D (056) 02P-D_3 Indoor error 53 Indoor Error High
-27/06/26   08:25 SL DE REUNIÃO_57_2P-D (057) 02P-D_3 Indoor error 53 Indoor Error High
-27/06/26   08:25 RECEPÇÃO_58_2P-D (058) 02P-D_3 Indoor error 53 Indoor Error High
-26/06/26   22:05 ODU L4.C00.0D80 9P-B_C(12) Outdoor error 53 Outdoor Error High
-26/06/26   21:36 ODU L4.D00.0D80 09P-D_D(13) Outdoor error 53 Outdoor Error High
-26/06/26   21:16 ODU L4.D00.0D80 09P-D_D(13) Outdoor error 53 Outdoor Error High
-26/06/26   21:00 L4.09E.0166_11P-A (09E) 11P-A_4_4 Indoor error 2 Indoor unit inlet pipe temperature sensor communication error. Indoor Error High
-26/06/26   20:40 L4.09E.0166_11P-A (09E) 11P-A_4_4 Indoor error 2 Indoor unit inlet pipe temperature sensor communication error. Indoor Error High
-26/06/26   17:00 03_6P-D (05A) 06P-D_1 Indoor error 4 Indoor unit drain overflow error. Indoor Error High
-26/06/26   16:05 ODU L4.C00.0D80 9P-B_C(12) Outdoor error 53 Outdoor Error High
-26/06/26   16:04 ODU L4.D00.0D80 09P-D_D(13) Outdoor error 53 Outdoor Error High
-26/06/26   12:04 ODU L4.D00.0D80 09P-D_D(13) Outdoor error 53 Outdoor Error High
-26/06/26   12:04 ODU L4.C00.0D80 9P-B_C(12) Outdoor error 53 Outdoor Error High
-26/06/26   07:34 multiple multiple Units disconnected Units disconnected High
-26/06/26   07:32 multiple multiple Units disconnected Units disconnected High
-26/06/26   07:32 UE-07_3P-C (026) 03P-C_5 Units disconnected Units disconnected High
-25/06/26   23:27 ODU L4.D00.0D80 09P-D_D(13) Outdoor error 53 Outdoor Error High
-25/06/26   23:27 ODU L4.C00.0D80 9P-B_C(12) Outdoor error 53 Outdoor Error High
-25/06/26   16:55 14P-A_MAIN 14P-A_A(10) Outdoor error 53 Outdoor Error High
-25/06/26   14:42 14P-A_MAIN 14P-A_A(10) Outdoor error 53 Outdoor Error High
-25/06/26   09:56 14P-A_MAIN 14P-A_A(10) Outdoor error 53 Outdoor Error High
-25/06/26   08:55 PORTO PREMIO 2_4P-A (03B) 04P-A_6 Indoor error 10 Indoor unit BLDC fan motor communications error. Indoor Error High
-24/06/26   21:34 ODU L4.D00.0D80 09P-D_D(13) Outdoor error 53 Outdoor Error High
-24/06/26   21:34 ODU L4.C00.0D80 9P-B_C(12) Outdoor error 53 Outdoor Error High
-24/06/26   21:11 ODU L4.D00.0D80 09P-D_D(13) Outdoor error 53 Outdoor Error High
-24/06/26   17:15 11P-C_MAIN 11P-C_4_5 Outdoor error 116 Outdoor Error High
-23/06/26   19:09 ODU L4.D00.0D80 09P-D_D(13) Outdoor error 53 Outdoor Error High
-23/06/26   19:09 ODU L4.C00.0D80 9P-B_C(12) Outdoor error 53 Outdoor Error High
-23/06/26   06:45 01_13P-B (0C0) 13P-B_8 Indoor error 53 Indoor Error High
-23/06/26   06:45 02_VICE PRESIDÊNCIA (0C1) 13P-B_8 Indoor error 53 Indoor Error High
-23/06/26   06:45 03_TELEVENDAS 5 (0C2) 13P-B_8 Indoor error 53 Indoor Error High
-23/06/26   06:45 04_TELEVENDAS 4 (0C3) 13P-B_8 Indoor error 53 Indoor Error High
-23/06/26   06:45 08_CPD (0C7) 13P-B_8 Indoor error 53 Indoor Error High
-23/06/26   06:45 06_SL DANIEL (0C5) 13P-B_8 Indoor error 53 Indoor Error High
-23/06/26   06:45 07_TELEVENDAS 2 (0C6) 13P-B_8 Indoor error 53 Indoor Error High
-23/06/26   06:45 05_ TELEVENDAS 3 (0C4) 13P-B_8 Indoor error 53 Indoor Error High
-23/06/26   06:42 ODU L6.800.0D80 13P-B_8 Outdoor error 53 Outdoor Error High
-22/06/26   22:15 6P-D-MAIN 06P-D_1 Outdoor error 21 Outdoor Error High
-22/06/26   21:59 ODU L4.D00.0D80 09P-D_D(13) Outdoor error 53 Outdoor Error High
-22/06/26   21:59 ODU L4.C00.0D80 9P-B_C(12) Outdoor error 53 Outdoor Error High
-22/06/26   21:35 ODU L6.700.1235 04P-C_7 Outdoor error 26 Outdoor Error High
-22/06/26   13:27 ODU L4.900.1235 13P-C_4_9 Outdoor error 150 Outdoor Error High
-22/06/26   08:55 L4.0B8.1235_12P-A (0B8) 12P-A_4_6 Indoor error 53 Indoor Error High
-22/06/26   08:55 L4.0B9.1235_12P-A (0B9) 12P-A_4_6 Indoor error 53 Indoor Error High
-22/06/26   08:55 L4.0BA.1235_12P-A (0BA) 12P-A_4_6 Indoor error 53 Indoor Error High
-22/06/26   08:55 L4.0BB.1235_12P-A (0BB) 12P-A_4_6 Indoor error 53 Indoor Error High
-22/06/26   08:40 L4.0BC.1235_12P-A (0BC) 12P-A_4_6 Indoor error 53 Indoor Error High
-22/06/26   08:40 L4.0BD.1235_12P-A (0BD) 12P-A_4_6 Indoor error 53 Indoor Error High
-22/06/26   08:40 L4.0BE.1235_12P-A (0BE) 12P-A_4_6 Indoor error 53 Indoor Error High
-22/06/26   08:40 L4.0BF.1235_12P-A (0BF) 12P-A_4_6 Indoor error 53 Indoor Error High
-22/06/26   08:39 ODU L4.600.1235 12P-A_4_6 Outdoor error 53 Outdoor Error High
-22/06/26   07:50 L4.0BC.1235_12P-A (0BC) 12P-A_4_6 Indoor error 53 Indoor Error High
-22/06/26   07:50 L4.0BD.1235_12P-A (0BD) 12P-A_4_6 Indoor error 53 Indoor Error High
-22/06/26   07:50 L4.0BE.1235_12P-A (0BE) 12P-A_4_6 Indoor error 53 Indoor Error High
-22/06/26   07:50 L4.0BF.1235_12P-A (0BF) 12P-A_4_6 Indoor error 53 Indoor Error High
-22/06/26   07:46 ODU L4.600.1235 12P-A_4_6 Outdoor error 53 Outdoor Error High
-22/06/26   07:40 L4.0BD.1235_12P-A (0BD) 12P-A_4_6 Indoor error 4 Indoor unit drain overflow error. Indoor Error High
-21/06/26   13:55 L6.010_2P-C (010) 02P-C_3 Indoor error 53 Indoor Error High
-21/06/26   13:55 L6.011_2P-C (011) 02P-C_3 Indoor error 53 Indoor Error High
-21/06/26   13:55 L6.012_2P-C (012) 02P-C_3 Indoor error 53 Indoor Error High
-21/06/26   13:55 L6.013_2P-C (013) 02P-C_3 Indoor error 53 Indoor Error High
-21/06/26   13:55 L6.014_2P-C (014) 02P-C_3 Indoor error 53 Indoor Error High
-21/06/26   13:55 L6.015_2P-C (015) 02P-C_3 Indoor error 53 Indoor Error High
-21/06/26   13:55 L6.016_2P-C (016) 02P-C_3 Indoor error 53 Indoor Error High
-21/06/26   13:55 L6.017_2P-C (017) 02P-C_3 Indoor error 53 Indoor Error High
-21/06/26   13:54 02P-C_MAIN 02P-C_3 Outdoor error 53 Outdoor Error High
-21/06/26   02:25 L4.09E.0166_11P-A (09E) 11P-A_4_4 Indoor error 2 Indoor unit inlet pipe temperature sensor communication error. Indoor Error High
-21/06/26   01:20 L4.09E.0166_11P-A (09E) 11P-A_4_4 Indoor error 2 Indoor unit inlet pipe temperature sensor communication error. Indoor Error High
-21/06/26   01:00 L4.09E.0166_11P-A (09E) 11P-A_4_4 Indoor error 2 Indoor unit inlet pipe temperature sensor communication error. Indoor Error High
-21/06/26   00:45 L4.09E.0166_11P-A (09E) 11P-A_4_4 Indoor error 2 Indoor unit inlet pipe temperature sensor communication error. Indoor Error High
-20/06/26   05:45 NOBREAK_4P-C (035) 04P-C_7 Indoor error 10 Indoor unit BLDC fan motor communications error. Indoor Error High
-20/06/26   00:00 L4.09E.0166_11P-A (09E) 11P-A_4_4 Indoor error 2 Indoor unit inlet pipe temperature sensor communication error. Indoor Error High
-19/06/26   11:37 multiple 09P-C_4_1 Units disconnected Units disconnected High
-19/06/26   11:37 CPD_9P-C (0D8) 09P-C_4_1 Units disconnected Units disconnected High
-19/06/26   11:36 multiple 09P-C_4_1 Units disconnected Units disconnected High
-19/06/26   11:00 CALL CENTER 1_9P-C (080) 09P-C_4_1 Indoor error 53 Indoor Error High
-19/06/26   11:00 CALL CENTER 2_9P-C (081) 09P-C_4_1 Indoor error 53 Indoor Error High
-19/06/26   11:00 CALL CENTER 3_9P-C (082) 09P-C_4_1 Indoor error 53 Indoor Error High
-19/06/26   11:00 CALL CENTER 4_9P-C (083) 09P-C_4_1 Indoor error 53 Indoor Error High
-19/06/26   11:00 CALL CENTER 5_9P-C (084) 09P-C_4_1 Indoor error 53 Indoor Error High
-19/06/26   11:00 VENDAS 3_9P-C (085) 09P-C_4_1 Indoor error 53 Indoor Error High
-19/06/26   11:00 VENDAS 1_9P-C (086) 09P-C_4_1 Indoor error 53 Indoor Error High
-19/06/26   11:00 VENDAS 2_9P-C (087) 09P-C_4_1 Indoor error 53 Indoor Error High
-19/06/26   10:56 09P-C_MAIN 09P-C_4_1 Outdoor error 53 Outdoor Error High
-19/06/26   07:20 L4.0BD.1235_12P-A (0BD) 12P-A_4_6 Indoor error 4 Indoor unit drain overflow error. Indoor Error High
-19/06/26   06:45 ODU L6.B00.0D80 14P-D_B(11) VAGO Outdoor error 53 Outdoor Error High
-19/06/26   06:45 ODU L6.900.0D80 13P-D_9 Outdoor error 53 Outdoor Error High
-19/06/26   06:44 14P-A_MAIN 14P-A_A(10) Outdoor error 53 Outdoor Error High
-19/06/26   06:44 ODU L4.D00.0D80 09P-D_D(13) Outdoor error 53 Outdoor Error High
-19/06/26   06:44 ODU L4.C00.0D80 9P-B_C(12) Outdoor error 53 Outdoor Error High
-19/06/26   06:44 01P-B_MAIN 01P-B_0 Outdoor error 53 Outdoor Error High
-19/06/26   06:44 ODU L6.A00.0D80 14P-B_A(10) VAGO Outdoor error 53 Outdoor Error High
-19/06/26   06:44 ODU L6.800.0D80 13P-B_8 Outdoor error 53 Outdoor Error High
-19/06/26   06:44 ODU L6.900.1235 05P-C_9 Outdoor error 53 Outdoor Error High
-19/06/26   06:44 02P-C_MAIN 02P-C_3 Outdoor error 53 Outdoor Error High
-19/06/26   06:44 ODU L4.900.1235 13P-C_4_9 Outdoor error 53 Outdoor Error High
-19/06/26   06:44 multiple 06P-D_1 Units disconnected Units disconnected High
-19/06/26   06:41 multiple multiple Units disconnected Units disconnected High
-19/06/26   06:41 multiple multiple Units disconnected Units disconnected High
-19/06/26   06:40 UE-07_1P-C (006) 01P-C_1 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 UE-02_1P-A (009) 01P-A_0 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 UE-07_1P-A (00E) 01P-A_0 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 UE-08_1P-A (00F) 01P-A_0 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 GSC_18_2P-A (018) 01P-A_0 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 ENGENHARIA_1A_2P-A (01A) 02P-A_2 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 UE-04_3P-C (023) 03P-C_5 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 UE-07_3P-C (026) 03P-C_5 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 SKY 4_4P-C (031) 04P-C_7 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 SKY 2_4P-C (033) 04P-C_7 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 TREINAMENTO 4_4P-A (038) 04P-A_6 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 PORTO PREMIO 3_4P-A (03D) 04P-A_6 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 ENEL 1_5P-C (046) 05P-C_9 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 ENEL 2_5P-C (047) 05P-C_9 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 CREA 2_5P-A (04C) 05P-A_8 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 QUALIDADE_5P-A (04E) 05P-A_8 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 CREA 1_5P-A (04F) 05P-A_8 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 SL DE REUNIÃO_57_2P-D (057) 02P-D_3 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 06_8P-B_75 (075) 08P-B_A(10) Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 07_8P-B_76 (076) 08P-B_A(10) Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 03_8P-D_7A (07A) 08P-D_B(11) Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 03_10P-D (099) 10P-D_F(15) Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:40 L4.004.1235_11P-C (004) 11P-C_4_5 Indoor error 5 Communication error between outdoor unit PCB and indoor unit PCB. Indoor Error High
-19/06/26   06:07 14P-A_MAIN 14P-A_A(10) Outdoor error 53 Outdoor Error High
-19/06/26   06:07 ODU L4.D00.0D80 09P-D_D(13) Outdoor error 53 Outdoor Error High
-19/06/26   06:07 ODU L4.C00.0D80 9P-B_C(12) Outdoor error 53 Outdoor Error High
-19/06/26   06:07 01P-B_MAIN 01P-B_0 Outdoor error 53 Outdoor Error High
-19/06/26   06:07 ODU L6.B00.0D80 14P-D_B(11) VAGO Outdoor error 53 Outdoor Error High
-19/06/26   06:07 ODU L6.A00.0D80 14P-B_A(10) VAGO Outdoor error 53 Outdoor Error High
-19/06/26   06:06 ODU L4.900.1235 13P-C_4_9 Outdoor error 53 Outdoor Error High
-19/06/26   06:06 multiple multiple Units disconnected Units disconnected High
-19/06/26   06:05 multiple multiple Units disconnected Units disconnected High
-19/06/26   06:05 multiple 15-P-C_D(13) Units disconnected Units disconnected High
-19/06/26   06:04 multiple multiple Units disconnected Units disconnected High
-19/06/26   02:30 L4.0BD.1235_12P-A (0BD) 12P-A_4_6 Indoor error 4 Indoor unit drain overflow error. Indoor Error High
-18/06/26   23:00 02P-C_MAIN 02P-C_3 Outdoor error 32 Outdoor Error High
-18/06/26   20:40 02P-C_MAIN 02P-C_3 Outdoor error 21 Outdoor Error High
-18/06/26   17:44 ODU L4.900.1235 13P-C_4_9 Outdoor error 53 Outdoor Error High
-18/06/26   17:20 L4.0C0.0166_13P-C (0C0) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   17:20 L4.0C1.0166_13P-C (0C1) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   17:20 L4.0C2.0166_13P-C (0C2) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   17:20 L4.0C3.0166_13P-C (0C3) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   17:20 L4.0C4.0166_13P-C (0C4) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   17:20 L4.0C5.0166_13P-C (0C5) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   17:20 L4.0C6.0166_13P-C (0C6) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   17:20 L4.0C7.0166_13P-C (0C7) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   17:20 L4.0E0.1235_13P-C (0E0) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   17:20 L4.0E1.1235_13P-C (0E1) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   17:20 L4.0E2.1235_13P-C (0E2) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   17:20 L4.0E3.1235_13P-C (0E3) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   17:20 L4.0E4.1235_13P-C (0E4) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   17:19 ODU L4.900.1235 13P-C_4_9 Outdoor error 53 Outdoor Error High
-18/06/26   11:41 02P-C_MAIN 02P-C_3 Outdoor error 77 Outdoor Error High
-18/06/26   10:48 09P-C_MAIN 09P-C_4_1 Outdoor error 53 Outdoor Error High
-18/06/26   10:39 09P-C_MAIN 09P-C_4_1 Outdoor error 53 Outdoor Error High
-18/06/26   10:30 09P-C_MAIN 09P-C_4_1 Outdoor error 53 Outdoor Error High
-18/06/26   10:16 09P-C_MAIN 09P-C_4_1 Outdoor error 53 Outdoor Error High
-18/06/26   10:06 09P-C_MAIN 09P-C_4_1 Outdoor error 53 Outdoor Error High
-18/06/26   09:45 09P-C_MAIN 09P-C_4_1 Outdoor error 53 Outdoor Error High
-18/06/26   09:05 09P-C_MAIN 09P-C_4_1 Outdoor error 53 Outdoor Error High
-18/06/26   07:15 L4.0C0.0166_13P-C (0C0) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   07:15 L4.0C1.0166_13P-C (0C1) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   07:15 L4.0C6.0166_13P-C (0C6) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   07:15 L4.0C7.0166_13P-C (0C7) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   07:15 L4.0E0.1235_13P-C (0E0) 13P-C_4_9 Indoor error 53 Indoor Error High
-18/06/26   07:12 ODU L4.900.1235 13P-C_4_9 Outdoor error 53 Outdoor Error High
-17/06/26   22:58 ODU L6.900.1235 05P-C_9 Outdoor error 53 Outdoor Error High
-17/06/26   22:57 ODU L6.900.1235 05P-C_9 Outdoor error 35 Outdoor Error High
-17/06/26   17:45 L4.0C0.0166_13P-C (0C0) 13P-C_4_9 Indoor error 53 Indoor Error High
-17/06/26   17:45 L4.0C1.0166_13P-C (0C1) 13P-C_4_9 Indoor error 53 Indoor Error High
-17/06/26   17:45 L4.0C2.0166_13P-C (0C2) 13P-C_4_9 Indoor error 53 Indoor Error High
-17/06/26   17:45 L4.0C3.0166_13P-C (0C3) 13P-C_4_9 Indoor error 53 Indoor Error High
-17/06/26   17:45 L4.0C4.0166_13P-C (0C4) 13P-C_4_9 Indoor error 53 Indoor Error High
-17/06/26   17:45 L4.0C5.0166_13P-C (0C5) 13P-C_4_9 Indoor error 53 Indoor Error High
-17/06/26   17:45 L4.0C6.0166_13P-C (0C6) 13P-C_4_9 Indoor error 53 Indoor Error High
-17/06/26   17:45 L4.0C7.0166_13P-C (0C7) 13P-C_4_9 Indoor error 53 Indoor Error High
-17/06/26   17:45 L4.0E0.1235_13P-C (0E0) 13P-C_4_9 Indoor error 53 Indoor Error High
-17/06/26   17:45 L4.0E1.1235_13P-C (0E1) 13P-C_4_9 Indoor error 53 Indoor Error High
-17/06/26   17:45 L4.0E2.1235_13P-C (0E2) 13P-C_4_9 Indoor error 53 Indoor Error High
-17/06/26   17:45 L4.0E3.1235_13P-C (0E3) 13P-C_4_9 Indoor error 53 Indoor Error High
-17/06/26   17:45 L4.0E4.1235_13P-C (0E4) 13P-C_4_9 Indoor error 53 Indoor Error High
-17/06/26   17:43 ODU L4.900.1235 13P-C_4_9 Outdoor error 53 Outdoor Error High
-17/06/26   15:33 ODU L6.700.1235 04P-C_7 Outdoor error 21 Outdoor Error High
-17/06/26   12:32 09P-C_MAIN 09P-C_4_1 Outdoor error 42 Outdoor Error High
-17/06/26   11:10 CALL CENTER 1_9P-C (080) 09P-C_4_1 Indoor error 42 Indoor Error High
-17/06/26   11:10 CALL CENTER 2_9P-C (081) 09P-C_4_1 Indoor error 42 Indoor Error High
-17/06/26   11:10 CALL CENTER 3_9P-C (082) 09P-C_4_1 Indoor error 42 Indoor Error High
-17/06/26   11:10 CALL CENTER 4_9P-C (083) 09P-C_4_1 Indoor error 42 Indoor Error High
-17/06/26   11:10 CALL CENTER 5_9P-C (084) 09P-C_4_1 Indoor error 42 Indoor Error High
-17/06/26   11:10 VENDAS 3_9P-C (085) 09P-C_4_1 Indoor error 42 Indoor Error High
-17/06/26   11:10 VENDAS 1_9P-C (086) 09P-C_4_1 Indoor error 42 Indoor Error High
-17/06/26   11:10 VENDAS 2_9P-C (087) 09P-C_4_1 Indoor error 42 Indoor Error High
-17/06/26   07:37 ODU L4.900.1235 13P-C_4_9 Outdoor error 53 Outdoor Error High
-17/06/26   07:00 ODU L4.900.1235 13P-C_4_9 Outdoor error 53 Outdoor Error High
-17/06/26   06:20 L6.06F.0165_7P-D (06F) 07P-D_3 Indoor error 4 Indoor unit drain overflow error. Indoor Error High
-16/06/26   18:35 ODU L4.900.1235 13P-C_4_9 Outdoor error 53 Outdoor Error High
-16/06/26   18:35 L4.0C0.0166_13P-C (0C0) 13P-C_4_9 Indoor error 53 Indoor Error High
-16/06/26   18:35 L4.0C1.0166_13P-C (0C1) 13P-C_4_9 Indoor error 53 Indoor Error High
-16/06/26   18:35 L4.0C2.0166_13P-C (0C2) 13P-C_4_9 Indoor error 53 Indoor Error High
-16/06/26   18:35 L4.0C3.0166_13P-C (0C3) 13P-C_4_9 Indoor error 53 Indoor Error High
-16/06/26   18:35 L4.0C4.0166_13P-C (0C4) 13P-C_4_9 Indoor error 53 Indoor Error High
-16/06/26   18:35 L4.0C5.0166_13P-C (0C5) 13P-C_4_9 Indoor error 53 Indoor Error High
-16/06/26   18:35 L4.0C6.0166_13P-C (0C6) 13P-C_4_9 Indoor error 53 Indoor Error High
-16/06/26   18:35 L4.0C7.0166_13P-C (0C7) 13P-C_4_9 Indoor error 53 Indoor Error High
-16/06/26   18:35 L4.0E0.1235_13P-C (0E0) 13P-C_4_9 Indoor error 53 Indoor Error High
-16/06/26   18:35 L4.0E1.1235_13P-C (0E1) 13P-C_4_9 Indoor error 53 Indoor Error High
-16/06/26   18:35 L4.0E2.1235_13P-C (0E2) 13P-C_4_9 Indoor error 53 Indoor Error High
-16/06/26   18:35 L4.0E3.1235_13P-C (0E3) 13P-C_4_9 Indoor error 53 Indoor Error High
-16/06/26   18:35 L4.0E4.1235_13P-C (0E4) 13P-C_4_9 Indoor error 53 Indoor Error High
-16/06/26   12:23 multiple 09P-C_4_1 Units disconnected Units disconnected High
-16/06/26   12:23 multiple 09P-C_4_1 Units disconnected Units disconnected High
-16/06/26   12:08 14P-A_MAIN 14P-A_A(10) Outdoor error 53 Outdoor Error High
-16/06/26   11:31 ODU L4.C00.0D80 9P-B_C(12) Outdoor error 53 Outdoor Error High
-16/06/26   09:49 09P-C_MAIN 09P-C_4_1 Outdoor error 53 Outdoor Error High
-16/06/26   09:12 multiple 09P-C_4_1 Units disconnected Units disconnected High
-16/06/26   05:45 NOBREAK_4P-C (035) 04P-C_7 Indoor error 10 Indoor unit BLDC fan motor communications error. Indoor Error High
-15/06/26   18:05 L4.0C0.0166_13P-C (0C0) 13P-C_4_9 Indoor error 53 Indoor Error High
-15/06/26   18:05 L4.0C1.0166_13P-C (0C1) 13P-C_4_9 Indoor error 53 Indoor Error High
-15/06/26   18:05 L4.0C6.0166_13P-C (0C6) 13P-C_4_9 Indoor error 53 Indoor Error High
-15/06/26   18:05 L4.0C7.0166_13P-C (0C7) 13P-C_4_9 Indoor error 53 Indoor Error High
-15/06/26   18:05 L4.0E0.1235_13P-C (0E0) 13P-C_4_9 Indoor error 53 Indoor Error High
-15/06/26   18:01 ODU L4.900.1235 13P-C_4_9 Outdoor error 53 Outdoor Error High
-15/06/26   17:23 ODU L6.900.1235 05P-C_9 Outdoor error 53 Outdoor Error High
-15/06/26   17:22 ODU L6.900.1235 05P-C_9 Outdoor error 150 Outdoor Error High
-15/06/26   16:36 ODU L6.900.1235 05P-C_9 Outdoor error 53 Outdoor Error High
-15/06/26   16:35 ODU L6.900.1235 05P-C_9 Outdoor error 150 Outdoor Error High
-15/06/26   09:30 CALL CENTER 1_9P-C (080) 09P-C_4_1 Indoor error 53 Indoor Error High
-15/06/26   09:30 CALL CENTER 2_9P-C (081) 09P-C_4_1 Indoor error 53 Indoor Error High
-15/06/26   09:30 CALL CENTER 3_9P-C (082) 09P-C_4_1 Indoor error 53 Indoor Error High
-15/06/26   09:30 CALL CENTER 4_9P-C (083) 09P-C_4_1 Indoor error 53 Indoor Error High
-15/06/26   09:30 CALL CENTER 5_9P-C (084) 09P-C_4_1 Indoor error 53 Indoor Error High
-15/06/26   09:30 VENDAS 3_9P-C (085) 09P-C_4_1 Indoor error 53 Indoor Error High
-15/06/26   09:30 VENDAS 1_9P-C (086) 09P-C_4_1 Indoor error 53 Indoor Error High
-15/06/26   09:30 VENDAS 2_9P-C (087) 09P-C_4_1 Indoor error 53 Indoor Error High
-15/06/26   00:05 L4.0C0.0166_13P-C (0C0) 13P-C_4_9 Indoor error 53 Indoor Error High
-15/06/26   00:05 L4.0C1.0166_13P-C (0C1) 13P-C_4_9 Indoor error 53 Indoor Error High
-15/06/26   00:05 L4.0C6.0166_13P-C (0C6) 13P-C_4_9 Indoor error 53 Indoor Error High
-15/06/26   00:05 L4.0C7.0166_13P-C (0C7) 13P-C_4_9 Indoor error 53 Indoor Error High
-15/06/26   00:05 L4.0E0.1235_13P-C (0E0) 13P-C_4_9 Indoor error 53 Indoor Error High
-15/06/26   00:03 ODU L4.900.1235 13P-C_4_9 Outdoor error 53 Outdoor Error High
-14/06/26   23:08 6P-D-MAIN 06P-D_1 Outdoor error 116 Outdoor Error High
-14/06/26   23:04 6P-D-MAIN 06P-D_1 Outdoor error 21 Outdoor Error High
-14/06/26   19:25 L4.0C0.0166_13P-C (0C0) 13P-C_4_9 Indoor error 53 Indoor Error High
-14/06/26   19:25 L4.0C1.0166_13P-C (0C1) 13P-C_4_9 Indoor error 53 Indoor Error High
-14/06/26   19:25 L4.0C6.0166_13P-C (0C6) 13P-C_4_9 Indoor error 53 Indoor Error High
-14/06/26   19:25 L4.0C7.0166_13P-C (0C7) 13P-C_4_9 Indoor error 53 Indoor Error High
-14/06/26   19:25 L4.0E0.1235_13P-C (0E0) 13P-C_4_9 Indoor error 53 Indoor Error High
-14/06/26   19:20 L4.0C2.0166_13P-C (0C2) 13P-C_4_9 Indoor error 53 Indoor Error High
-14/06/26   19:20 L4.0C3.0166_13P-C (0C3) 13P-C_4_9 Indoor error 53 Indoor Error High
-14/06/26   19:20 L4.0C4.0166_13P-C (0C4) 13P-C_4_9 Indoor error 53 Indoor Error High
-14/06/26   19:20 L4.0C5.0166_13P-C (0C5) 13P-C_4_9 Indoor error 53 Indoor Error High
-14/06/26   19:20 L4.0E1.1235_13P-C (0E1) 13P-C_4_9 Indoor error 53 Indoor Error High
-14/06/26   19:20 L4.0E2.1235_13P-C (0E2) 13P-C_4_9 Indoor error 53 Indoor Error High
-14/06/26   19:20 L4.0E3.1235_13P-C (0E3) 13P-C_4_9 Indoor error 53 Indoor Error High
-14/06/26   19:20 L4.0E4.1235_13P-C (0E4) 13P-C_4_9 Indoor error 53 Indoor Error High
-14/06/26   19:20 ODU L4.900.1235 13P-C_4_9 Outdoor error 53 Outdoor Error High
-14/06/26   03:27 6P-D-MAIN 06P-D_1 Outdoor error 116 Outdoor Error High
-14/06/26   03:25 6P-D-MAIN 06P-D_1 Outdoor error 26 Outdoor Error High
-14/06/26   02:32 6P-D-MAIN 06P-D_1 Outdoor error 116 Outdoor Error High
-14/06/26   02:30 6P-D-MAIN 06P-D_1 Outdoor error 26 Outdoor Error High
-13/06/26   14:10 L4.0C0.0166_13P-C (0C0) 13P-C_4_9 Indoor error 53 Indoor Error High
-13/06/26   14:10 L4.0C1.0166_13P-C (0C1) 13P-C_4_9 Indoor error 53 Indoor Error High
-13/06/26   14:10 L4.0C6.0166_13P-C (0C6) 13P-C_4_9 Indoor error 53 Indoor Error High
-13/06/26   14:10 L4.0C7.0166_13P-C (0C7) 13P-C_4_9 Indoor error 53 Indoor Error High
-13/06/26   14:10 L4.0E0.1235_13P-C (0E0) 13P-C_4_9 Indoor error 53 Indoor Error High
-13/06/26   14:07 ODU L4.900.1235 13P-C_4_9 Outdoor error 53 Outdoor Error High
-13/06/26   12:57 ODU L4.800.1235 13P-A_4_8 Outdoor error 53 Outdoor Error High
-`.trim()
+type WestCorpChSeverity = 'High' | 'Medium'
+type WestCorpChCategory = 'Critical Outdoor' | 'Outdoor Error' | 'Indoor Error' | 'Indoor Control' | 'Sensor Alarm' | 'Communication Error'
+
+type WestCorpChMeta = {
+  severity: WestCorpChSeverity
+  category: WestCorpChCategory
+  shortTitle: string
+  impact: string
+  description: string
+}
+
+const CH_METADATA: Record<string, WestCorpChMeta> = {
+  CH02: { severity: 'High', category: 'Indoor Error', shortTitle: 'Falha unidade interna (IDU)', impact: 'Pode comprometer a operacao da unidade e requer investigacao.', description: 'Falha associada a unidade interna; requer avaliacao da evaporadora, sensores, conexoes e controle.' },
+  CH04: { severity: 'High', category: 'Indoor Error', shortTitle: 'Falha unidade interna (IDU)', impact: 'Pode comprometer a operacao da unidade e requer investigacao.', description: 'Falha associada a unidade interna; requer inspecao da evaporadora e circuitos associados.' },
+  CH10: { severity: 'High', category: 'Indoor Error', shortTitle: 'Falha unidade interna (IDU)', impact: 'Pode comprometer a operacao da unidade e requer investigacao.', description: 'Falha associada a unidade interna; requer diagnostico da unidade e circuitos de controle.' },
+  CH116: { severity: 'High', category: 'Outdoor Error', shortTitle: 'Alarme de sistema (ODU)', impact: 'Pode comprometer a operacao da unidade e requer investigacao.', description: 'Investigacao complementar de compressor/inverter e condicoes de retorno/gerenciamento de oleo.' },
+  CH150: { severity: 'High', category: 'Indoor Control', shortTitle: 'Condicao operacao IDU', impact: 'Pode comprometer a operacao da unidade e requer investigacao.', description: 'Correcao com temperatura, EEV, superaquecimento e condicao frigorifica.' },
+  CH151: { severity: 'High', category: 'Indoor Control', shortTitle: 'Controle frigorifico IDU', impact: 'Pode comprometer a operacao da unidade e requer investigacao.', description: 'Diagnostico de campo e correlacao com pressao, temperatura e valvulas.' },
+  CH21: { severity: 'High', category: 'Critical Outdoor', shortTitle: 'Inverter / Compressor', impact: 'Pode provocar indisponibilidade da unidade externa/sistema e perda de climatizacao.', description: 'Recorrencia no caminho Inverter/Compressor. Investigar eletrica do compressor, IPM/placa e cabeamento.' },
+  CH23: { severity: 'High', category: 'Critical Outdoor', shortTitle: 'Circuito eletrico DC', impact: 'Pode provocar indisponibilidade da unidade externa/sistema e perda de climatizacao.', description: 'Falha associada ao circuito eletrico/DC do sistema. Investigar circuito eletrico e inversor.' },
+  CH24: { severity: 'High', category: 'Outdoor Error', shortTitle: 'Alimentacao AC', impact: 'Pode provocar indisponibilidade da unidade externa/sistema e perda de climatizacao.', description: 'Alarme registrado e correlacionado com alimentacao AC dentro da faixa analisada; causa especifica nao determinada, requer diagnostico de campo.' },
+  CH26: { severity: 'High', category: 'Critical Outdoor', shortTitle: 'Lockout partida / Inverter', impact: 'Pode provocar indisponibilidade da unidade externa/sistema e perda de climatizacao.', description: 'Falha de partida/protecao do conjunto Compressor/Inverter (lockout apos 25 Hz / corrente 22,8 A).' },
+  CH29: { severity: 'High', category: 'Critical Outdoor', shortTitle: 'Corrente anormal inverter', impact: 'Pode provocar indisponibilidade da unidade externa/sistema e perda de climatizacao.', description: 'Convergencia com corrente anormal do compressor inverter. Investigar compressor, IPM/inverter, circuito DC/PFC/pre-carga e sensores.' },
+  CH34: { severity: 'High', category: 'Outdoor Error', shortTitle: 'Protecao de sistema', impact: 'Pode provocar indisponibilidade da unidade externa/sistema e perda de climatizacao.', description: 'Alarme de protecao do sistema; investigacao de campo e correlacao com pressoes e condicoes de operacao.' },
+  CH35: { severity: 'High', category: 'Outdoor Error', shortTitle: 'Protecao de sistema', impact: 'Pode provocar indisponibilidade da unidade externa/sistema e perda de climatizacao.', description: 'Alarme de protecao do sistema; investigacao frigorifica e correlacao com pressoes, temperaturas e carga.' },
+  CH42: { severity: 'Medium', category: 'Sensor Alarm', shortTitle: 'Falha sensor / controle', impact: 'Pode comprometer a operacao da unidade e requer investigacao.', description: 'Falha associada a sensor/controle; validar sensor, cabeamento e leitura no sistema.' },
+  CH45: { severity: 'Medium', category: 'Sensor Alarm', shortTitle: 'Falha sensor / controle', impact: 'Pode comprometer a operacao da unidade e requer investigacao.', description: 'Falha associada a sensor/controle; validar sensor, cabeamento e leitura no sistema.' },
+  CH52: { severity: 'High', category: 'Communication Error', shortTitle: 'Comunicacao / controle', impact: 'Pode comprometer a operacao da unidade e requer investigacao.', description: 'Falha de comunicacao/controle; investigar barramento de comunicacao, alimentacao e placas.' },
+  CH53: { severity: 'High', category: 'Communication Error', shortTitle: 'Comunicacao entre unidades', impact: 'Pode comprometer a operacao da unidade e requer investigacao.', description: 'Falha de comunicacao entre unidades. Investigar comunicacao, alimentacao e conexoes do sistema.' },
+  CH62: { severity: 'High', category: 'Outdoor Error', shortTitle: 'Termica inversor', impact: 'Pode provocar indisponibilidade da unidade externa/sistema e perda de climatizacao.', description: 'Alarme associado a condicao termica do conjunto inverter; inspecao do inversor, dissipacao e condicoes de operacao.' },
+  CH77: { severity: 'High', category: 'Outdoor Error', shortTitle: 'Unidade externa (ODU)', impact: 'Pode provocar indisponibilidade da unidade externa/sistema e perda de climatizacao.', description: 'Alarme associado a unidade externa; investigar conjunto afetado e correlacao com telemetria.' },
+}
+
+type WestCorpAggregatedRow = {
+  chCode: string
+  equipmentName: string
+  systemLabel: string
+  occurrences: number
+}
+
+const RAW_AGGREGATED_ROWS: WestCorpAggregatedRow[] = [
+  { chCode: 'CH02', equipmentName: 'L4.09E.0166_11P-A (09E)', systemLabel: '11P-A_4_4', occurrences: 204 },
+  { chCode: 'CH62', equipmentName: '05P-C_MAIN', systemLabel: '05P-C_9', occurrences: 19 },
+  { chCode: 'CH53', equipmentName: 'ODU L4.C00.0D80', systemLabel: '9P-B_C(12)V', occurrences: 17 },
+  { chCode: 'CH35', equipmentName: '05P-C_MAIN', systemLabel: '05P-C_9', occurrences: 11 },
+  { chCode: 'CH04', equipmentName: '08_8P-A_7F (07F)', systemLabel: '08P-A_E(14)', occurrences: 11 },
+  { chCode: 'CH53', equipmentName: '06P-C_MAIN', systemLabel: '06P-C_B(11)', occurrences: 10 },
+  { chCode: 'CH53', equipmentName: 'ODU L4.D00.0D80', systemLabel: '09P-D_D(13)V', occurrences: 10 },
+  { chCode: 'CH150', equipmentName: '13P-C_MAIN', systemLabel: '13P-C_4_9', occurrences: 7 },
+  { chCode: 'CH10', equipmentName: 'NOBREAK_4P-C (035)', systemLabel: '04P-C_7', occurrences: 6 },
+  { chCode: 'CH150', equipmentName: 'COMERCIA 1_7P-C (060)', systemLabel: '07P-C_D(13)', occurrences: 5 },
+  { chCode: 'CH150', equipmentName: 'COMERCIAL 2_7P-C (062)', systemLabel: '07P-C_D(13)', occurrences: 5 },
+  { chCode: 'CH150', equipmentName: 'COMERCIAL 3_7P-C (064)', systemLabel: '07P-C_D(13)', occurrences: 5 },
+  { chCode: 'CH150', equipmentName: 'COMERCIAL 4_7P-C (066)', systemLabel: '07P-C_D(13)', occurrences: 5 },
+  { chCode: 'CH150', equipmentName: 'COMERCIAL 5_7P-C (067)', systemLabel: '07P-C_D(13)', occurrences: 5 },
+  { chCode: 'CH150', equipmentName: 'COMERCIAL 6_7P-C (065)', systemLabel: '07P-C_D(13)', occurrences: 5 },
+  { chCode: 'CH150', equipmentName: 'ENTRADA T.I_7P-C (063)', systemLabel: '07P-C_D(13)', occurrences: 5 },
+  { chCode: 'CH150', equipmentName: 'REUNIAO_7P-C (061)', systemLabel: '07P-C_D(13)', occurrences: 5 },
+  { chCode: 'CH53', equipmentName: '05P-C_MAIN', systemLabel: '05P-C_9', occurrences: 4 },
+  { chCode: 'CH53', equipmentName: '09P-C_MAIN', systemLabel: '09P-C_4_1', occurrences: 4 },
+  { chCode: 'CH53', equipmentName: '14P-A_MAIN', systemLabel: '14P-A_A(10)V', occurrences: 4 },
+  { chCode: 'CH53', equipmentName: '01P-B_MAIN', systemLabel: '01P-B_0', occurrences: 3 },
+  { chCode: 'CH150', equipmentName: '02P-D_MAIN', systemLabel: '02P-D_3', occurrences: 3 },
+  { chCode: 'CH53', equipmentName: '08_6P-C (057)', systemLabel: '06P-C_B(11)', occurrences: 3 },
+  { chCode: 'CH53', equipmentName: '01_6P-D (058)', systemLabel: '06P-D_1', occurrences: 3 },
+  { chCode: 'CH53', equipmentName: '02_6P-D (059)', systemLabel: '06P-D_1', occurrences: 3 },
+  { chCode: 'CH53', equipmentName: '03_6P-D (05A)', systemLabel: '06P-D_1', occurrences: 3 },
+  { chCode: 'CH53', equipmentName: '6P-D-MAIN', systemLabel: '06P-D_1', occurrences: 3 },
+  { chCode: 'CH53', equipmentName: 'L4.002.0D80_1P-B (002)', systemLabel: '01P-B_0', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: 'L4.003.0D80_1P-B (003)', systemLabel: '01P-B_0', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: 'L4.004.0D80_1P-B (004)', systemLabel: '01P-B_0', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: 'L4.005.0D80_1P-B (005)', systemLabel: '01P-B_0', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: 'L4.006.0D80_1P-B (006)', systemLabel: '01P-B_0', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: 'L4.007.0D80_1P-B (007)', systemLabel: '01P-B_0', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: 'L4.010.0D80_1P-B (010)', systemLabel: '01P-B_0', occurrences: 2 },
+  { chCode: 'CH24', equipmentName: '05P-C_MAIN', systemLabel: '05P-C_9', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: '01_6P-C (050)', systemLabel: '06P-C_B(11)', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: '02_6P-C (051)', systemLabel: '06P-C_B(11)', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: '04_6P-C (053)', systemLabel: '06P-C_B(11)', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: '07_6P-C (056)', systemLabel: '06P-C_B(11)', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: '04_6P-D (05B)', systemLabel: '06P-D_1', occurrences: 2 },
+  { chCode: 'CH151', equipmentName: 'COMERCIA 1_7P-C (060)', systemLabel: '07P-C_D(13)', occurrences: 2 },
+  { chCode: 'CH151', equipmentName: 'COMERCIAL 2_7P-C (062)', systemLabel: '07P-C_D(13)', occurrences: 2 },
+  { chCode: 'CH151', equipmentName: 'COMERCIAL 3_7P-C (064)', systemLabel: '07P-C_D(13)', occurrences: 2 },
+  { chCode: 'CH151', equipmentName: 'COMERCIAL 4_7P-C (066)', systemLabel: '07P-C_D(13)', occurrences: 2 },
+  { chCode: 'CH151', equipmentName: 'COMERCIAL 5_7P-C (067)', systemLabel: '07P-C_D(13)', occurrences: 2 },
+  { chCode: 'CH151', equipmentName: 'COMERCIAL 6_7P-C (065)', systemLabel: '07P-C_D(13)', occurrences: 2 },
+  { chCode: 'CH151', equipmentName: 'ENTRADA T.I_7P-C (063)', systemLabel: '07P-C_D(13)', occurrences: 2 },
+  { chCode: 'CH151', equipmentName: 'REUNIAO_7P-C (061)', systemLabel: '07P-C_D(13)', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: '09P-A_MAIN', systemLabel: '09P-A_4_0', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: '10P-A_MAIN', systemLabel: '10P-A_4_2', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: '10P-C_MAIN', systemLabel: '10P-C_4_3', occurrences: 2 },
+  { chCode: 'CH116', equipmentName: '11P-C_MAIN', systemLabel: '11P-C_4_5', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: '13P-A_MAIN', systemLabel: '13P-A_4_8', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: 'L4.0C8.01669_13P-A (0C8)', systemLabel: '13P-A_4_8', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: 'L4.0C9.0166_13P-A (0C9)', systemLabel: '13P-A_4_8', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: 'L4.0CA.0166_13P-A (0CA)', systemLabel: '13P-A_4_8', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: 'L4.0CB.0166_13P-A (0CB)', systemLabel: '13P-A_4_8', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: 'L4.0CC.0166_13P-A (0CC)', systemLabel: '13P-A_4_8', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: 'L4.0CD.0166_13P-A (0CD)', systemLabel: '13P-A_4_8', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: 'L4.0CE.0166_13P-A (0CE)', systemLabel: '13P-A_4_8', occurrences: 2 },
+  { chCode: 'CH53', equipmentName: 'L4.0CF.0166_13P-A (0CF)', systemLabel: '13P-A_4_8', occurrences: 2 },
+  { chCode: 'CH116', equipmentName: '02P-B_MAIN', systemLabel: '02P-B_2', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '02P-C_MAIN', systemLabel: '02P-C_3', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L6.010_2P-C (010)', systemLabel: '02P-C_3', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L6.011_2P-C (011)', systemLabel: '02P-C_3', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L6.012_2P-C (012)', systemLabel: '02P-C_3', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L6.013_2P-C (013)', systemLabel: '02P-C_3', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L6.014_2P-C (014)', systemLabel: '02P-C_3', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L6.015_2P-C (015)', systemLabel: '02P-C_3', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L6.016_2P-C (016)', systemLabel: '02P-C_3', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L6.017_2P-C (017)', systemLabel: '02P-C_3', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '03P-A_MAIN', systemLabel: '03P-A_4', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'AUDITORIO 1_3P-A (02E)', systemLabel: '03P-A_4', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'AUDITORIO 2_3P-A (02F)', systemLabel: '03P-A_4', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'AUDITORIO 3_3P-A (02C)', systemLabel: '03P-A_4', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'ESCRITORIO 1_3P-A (02A)', systemLabel: '03P-A_4', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'ESCRITORIO 2_3P-A (029)', systemLabel: '03P-A_4', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'ESTOQUE_3P-A (02B)', systemLabel: '03P-A_4', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'RECEPCAO_3P-A (028)', systemLabel: '03P-A_4', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'REFEITORIO 3_3P-A (02D)', systemLabel: '03P-A_4', occurrences: 1 },
+  { chCode: 'CH04', equipmentName: 'PORTO PREMIO 3_4P-A (03D)', systemLabel: '04P-A_6', occurrences: 1 },
+  { chCode: 'CH52', equipmentName: 'REFEITORIO_4P-D (038)', systemLabel: '04P-D_4', occurrences: 1 },
+  { chCode: 'CH52', equipmentName: 'REUNIAO_4P-D (03D)', systemLabel: '04P-D_4', occurrences: 1 },
+  { chCode: 'CH52', equipmentName: 'SERASA 1_4P-D (03A)', systemLabel: '04P-D_4', occurrences: 1 },
+  { chCode: 'CH52', equipmentName: 'SERASA 2_4P-D (03B)', systemLabel: '04P-D_4', occurrences: 1 },
+  { chCode: 'CH52', equipmentName: 'SERASA 3_4P-D (039)', systemLabel: '04P-D_4', occurrences: 1 },
+  { chCode: 'CH52', equipmentName: 'SERASA 4_4P-D (03C)', systemLabel: '04P-D_4', occurrences: 1 },
+  { chCode: 'CH52', equipmentName: 'SERASA 5_4P-D (03F)', systemLabel: '04P-D_4', occurrences: 1 },
+  { chCode: 'CH52', equipmentName: 'SERASA 6_4P-D (03E)', systemLabel: '04P-D_4', occurrences: 1 },
+  { chCode: 'CH77', equipmentName: '05P-A_MAIN', systemLabel: '05P-A_8', occurrences: 1 },
+  { chCode: 'CH34', equipmentName: '05P-C_MAIN', systemLabel: '05P-C_9', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '01-6P-A (058)', systemLabel: '06P-A_A(10)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '02-6P-A (059)', systemLabel: '06P-A_A(10)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '03-6P-A (05A)', systemLabel: '06P-A_A(10)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '04-6P-A (05B)', systemLabel: '06P-A_A(10)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '05-6P-A (05C)', systemLabel: '06P-A_A(10)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '06-6P-A (05D)', systemLabel: '06P-A_A(10)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '06P-A_MAIN', systemLabel: '06P-A_A(10)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '07-6P-A (05E)', systemLabel: '06P-A_A(10)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '08-6P-A (05F)', systemLabel: '06P-A_A(10)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '05_6P-C (054)', systemLabel: '06P-C_B(11)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '06_6P-C (055)', systemLabel: '06P-C_B(11)', occurrences: 1 },
+  { chCode: 'CH150', equipmentName: '6P-D-MAIN', systemLabel: '06P-D_1', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '11P-A_MAIN', systemLabel: '11P-A_4_4', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L4.09D.0166_11P-A (09D)', systemLabel: '11P-A_4_4', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L4.09E.0166_11P-A (09E)', systemLabel: '11P-A_4_4', occurrences: 1 },
+  { chCode: 'CH150', equipmentName: '11P-B_MAIN', systemLabel: '11P-B_4', occurrences: 1 },
+  { chCode: 'CH150', equipmentName: 'L5.090.0D80_11P-B (090)', systemLabel: '11P-B_4', occurrences: 1 },
+  { chCode: 'CH150', equipmentName: 'L5.092.0D80_11P-B (092)', systemLabel: '11P-B_4', occurrences: 1 },
+  { chCode: 'CH150', equipmentName: 'L5.093.0D80_11P-B (093)', systemLabel: '11P-B_4', occurrences: 1 },
+  { chCode: 'CH150', equipmentName: 'L5.095.0D80_11P-B (095)', systemLabel: '11P-B_4', occurrences: 1 },
+  { chCode: 'CH150', equipmentName: 'L5.097.0D80_11P-B (097)', systemLabel: '11P-B_4', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '12P-C_MAIN', systemLabel: '12P-C_4_7', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L6.0D8_14P-A (0D8)', systemLabel: '14P-A_A(10)V', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L6.0D9_14P-A (0D9)', systemLabel: '14P-A_A(10)V', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L6.0DA_14P-A (0DA)', systemLabel: '14P-A_A(10)V', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L6.0DB_14P-A (0DB)', systemLabel: '14P-A_A(10)V', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L6.0DC_14P-A (0DC)', systemLabel: '14P-A_A(10)V', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L6.0DD_14P-A (0DD)', systemLabel: '14P-A_A(10)V', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L6.0DE_14P-A (0DE)', systemLabel: '14P-A_A(10)V', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L6.0DF_14P-A (0DF)', systemLabel: '14P-A_A(10)V', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '14P-C_MAIN', systemLabel: '14P-C_4_B(11)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L4.0D0.1235_14P-C', systemLabel: '14P-C_4_B(11)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L4.0D1.1235_14P-C', systemLabel: '14P-C_4_B(11)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L4.0D2.1235_14P-C', systemLabel: '14P-C_4_B(11)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L4.0D3.1235_14P-C', systemLabel: '14P-C_4_B(11)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L4.0D4.1235_14P-C', systemLabel: '14P-C_4_B(11)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L4.0D5.1235_14P-C', systemLabel: '14P-C_4_B(11)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L4.0D6.1235_14P-C', systemLabel: '14P-C_4_B(11)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'L4.0D7.1235_14P-C', systemLabel: '14P-C_4_B(11)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '16P-C_MAIN', systemLabel: '16P-C_4_F', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'DEPOSITO_16P-C (0F5)', systemLabel: '16P-C_4_F', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'DIRETORIA_16P-C (0F0)', systemLabel: '16P-C_4_F', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'ESCRITORIO 1_16P-C (0F3)', systemLabel: '16P-C_4_F', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'ESCRITORIO 2_16P-C (0F2)', systemLabel: '16P-C_4_F', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'ESCRITORIO 3_16P-C (0F4)', systemLabel: '16P-C_4_F', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'ESCRITORIO 4_16P-C (0F1)', systemLabel: '16P-C_4_F', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'ESCRITORIO 5_16P-C (0F6)', systemLabel: '16P-C_4_F', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'ESCRITORIO 6_16P-C (0F7)', systemLabel: '16P-C_4_F', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: '16P-D_MAIN', systemLabel: '16P-D_F(15)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'ESCRITORIO 2_16P-D (0FD)', systemLabel: '16P-D_F(15)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'ESCRITORIO 3_16P-D (0FC)', systemLabel: '16P-D_F(15)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'ESCRITORIO 4_16P-D (0BF)', systemLabel: '16P-D_F(15)', occurrences: 1 },
+  { chCode: 'CH53', equipmentName: 'ESCRITORIO 5_16P-D (018)', systemLabel: '16P-D_F(15)', occurrences: 1 },
+  { chCode: 'CH21', equipmentName: '05P-C_MAIN', systemLabel: '05P-C_9', occurrences: 79 },
+  { chCode: 'CH29', equipmentName: '05P-C_MAIN', systemLabel: '05P-C_9', occurrences: 33 },
+  { chCode: 'CH21', equipmentName: '11P-B_MAIN', systemLabel: '11P-B_4', occurrences: 12 },
+  { chCode: 'CH21', equipmentName: '03P-D_MAIN', systemLabel: '03P-D_6', occurrences: 4 },
+  { chCode: 'CH21', equipmentName: 'COMERCIA 1_7P-C (060)', systemLabel: '07P-C_D(13)', occurrences: 4 },
+  { chCode: 'CH21', equipmentName: 'COMERCIAL 2_7P-C (062)', systemLabel: '07P-C_D(13)', occurrences: 4 },
+  { chCode: 'CH21', equipmentName: 'COMERCIAL 3_7P-C (064)', systemLabel: '07P-C_D(13)', occurrences: 4 },
+  { chCode: 'CH21', equipmentName: 'COMERCIAL 4_7P-C (066)', systemLabel: '07P-C_D(13)', occurrences: 4 },
+  { chCode: 'CH21', equipmentName: 'COMERCIAL 5_7P-C (067)', systemLabel: '07P-C_D(13)', occurrences: 4 },
+  { chCode: 'CH21', equipmentName: 'COMERCIAL 6_7P-C (065)', systemLabel: '07P-C_D(13)', occurrences: 4 },
+  { chCode: 'CH21', equipmentName: 'ENTRADA T.I_7P-C (063)', systemLabel: '07P-C_D(13)', occurrences: 4 },
+  { chCode: 'CH21', equipmentName: 'REUNIAO_7P-C (061)', systemLabel: '07P-C_D(13)', occurrences: 4 },
+  { chCode: 'CH21', equipmentName: '04P-C_MAIN', systemLabel: '04P-C_7', occurrences: 3 },
+  { chCode: 'CH21', equipmentName: '03P-B_MAIN', systemLabel: '03P-B_7', occurrences: 2 },
+  { chCode: 'CH23', equipmentName: '03P-D_MAIN', systemLabel: '03P-D_6', occurrences: 2 },
+  { chCode: 'CH26', equipmentName: '04P-C_MAIN', systemLabel: '04P-C_7', occurrences: 2 },
+  { chCode: 'CH21', equipmentName: '12P-C_MAIN', systemLabel: '12P-C_4_7', occurrences: 2 },
+  { chCode: 'CH21', equipmentName: '02P-B_MAIN', systemLabel: '02P-B_2', occurrences: 1 },
+  { chCode: 'CH21', equipmentName: '02P-C_MAIN', systemLabel: '02P-C_3', occurrences: 1 },
+  { chCode: 'CH29', equipmentName: '03P-C_MAIN', systemLabel: '03P-C_5', occurrences: 1 },
+  { chCode: 'CH21', equipmentName: '04P-A_MAIN', systemLabel: '04P-A_6', occurrences: 1 },
+  { chCode: 'CH26', equipmentName: '04P-A_MAIN', systemLabel: '04P-A_6', occurrences: 1 },
+  { chCode: 'CH21', equipmentName: '04P-D_MAIN', systemLabel: '04P-D_4', occurrences: 1 },
+  { chCode: 'CH21', equipmentName: '06P-A_MAIN', systemLabel: '06P-A_A(10)', occurrences: 1 },
+  { chCode: 'CH21', equipmentName: '6P-D-MAIN', systemLabel: '06P-D_1', occurrences: 1 },
+  { chCode: 'CH21', equipmentName: '08P-C_MAIN', systemLabel: '08P-C_F(15)', occurrences: 1 },
+  { chCode: 'CH21', equipmentName: '11P-C_MAIN', systemLabel: '11P-C_4_5', occurrences: 1 },
+  { chCode: 'CH21', equipmentName: '13P-A_MAIN', systemLabel: '13P-A_4_8', occurrences: 1 },
+  { chCode: 'CH45', equipmentName: '15-P-C_MAIN', systemLabel: '15-P-C_D(13)O', occurrences: 3 },
+  { chCode: 'CH42', equipmentName: '03P-D_MAIN', systemLabel: '03P-D_6', occurrences: 1 },
+  { chCode: 'CH42', equipmentName: 'AGIBANK 1_4P-B (012)', systemLabel: '04P-B_5', occurrences: 1 },
+  { chCode: 'CH42', equipmentName: 'AGIBANK 2_4P-B (011)', systemLabel: '04P-B_5', occurrences: 1 },
+  { chCode: 'CH42', equipmentName: 'AGIBANK 3_4P-B (013)', systemLabel: '04P-B_5', occurrences: 1 },
+  { chCode: 'CH42', equipmentName: 'AGIBANK 4_4P-B (032)', systemLabel: '04P-B_5', occurrences: 1 },
+  { chCode: 'CH42', equipmentName: 'AGIBANK 5_4P-B (014)', systemLabel: '04P-B_5', occurrences: 1 },
+  { chCode: 'CH42', equipmentName: 'AGIBANK 6_4P-B (036)', systemLabel: '04P-B_5', occurrences: 1 },
+  { chCode: 'CH42', equipmentName: 'AGIBANK 7_4P-B (037)', systemLabel: '04P-B_5', occurrences: 1 },
+  { chCode: 'CH42', equipmentName: 'MANUTENCAO_4P-B (035)', systemLabel: '04P-B_5', occurrences: 1 },
+  { chCode: 'CH42', equipmentName: '07P-C_MAIN', systemLabel: '07P-C_D(13)', occurrences: 1 },
+  { chCode: 'CH42', equipmentName: 'COMERCIA 1_7P-C (060)', systemLabel: '07P-C_D(13)', occurrences: 1 },
+  { chCode: 'CH42', equipmentName: 'COMERCIAL 2_7P-C (062)', systemLabel: '07P-C_D(13)', occurrences: 1 },
+  { chCode: 'CH42', equipmentName: 'COMERCIAL 3_7P-C (064)', systemLabel: '07P-C_D(13)', occurrences: 1 },
+  { chCode: 'CH42', equipmentName: 'COMERCIAL 4_7P-C (066)', systemLabel: '07P-C_D(13)', occurrences: 1 },
+  { chCode: 'CH42', equipmentName: 'COMERCIAL 5_7P-C (067)', systemLabel: '07P-C_D(13)', occurrences: 1 },
+  { chCode: 'CH42', equipmentName: 'COMERCIAL 6_7P-C (065)', systemLabel: '07P-C_D(13)', occurrences: 1 },
+  { chCode: 'CH42', equipmentName: 'ENTRADA T.I_7P-C (063)', systemLabel: '07P-C_D(13)', occurrences: 1 },
+  { chCode: 'CH42', equipmentName: 'REUNIAO_7P-C (061)', systemLabel: '07P-C_D(13)', occurrences: 1 },
+  { chCode: 'CH45', equipmentName: 'L6.0E0_15P-C (0E0)', systemLabel: '15-P-C_D(13)O', occurrences: 1 },
+  { chCode: 'CH45', equipmentName: 'L6.0E1_15P-C (0E1)', systemLabel: '15-P-C_D(13)O', occurrences: 1 },
+  { chCode: 'CH45', equipmentName: 'L6.0E2_15P-C (0E2)', systemLabel: '15-P-C_D(13)O', occurrences: 1 },
+  { chCode: 'CH45', equipmentName: 'L6.0E3_15P-C (0E3)', systemLabel: '15-P-C_D(13)O', occurrences: 1 },
+]
+
+const PEAK_SYSTEMS_BY_CH: Record<string, number[]> = {
+  CH02: [22, 23, 24, 25, 26, 27, 28],
+  CH21: [14, 15, 16, 17, 18, 19, 20, 21],
+  CH29: [16, 17, 18, 19, 20, 21],
+  CH26: [13, 14, 15, 16],
+  CH53: [2, 5, 8, 11, 14, 17, 20, 23, 26, 29],
+}
 
 function slugify(value: string) {
   return normalizeLabel(value).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -618,33 +280,12 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
-function toIsoDate(date: string, time: string) {
-  const [day, month, year] = date.split('/')
-  return `20${year}-${month}-${day} ${time}`
-}
-
-function toMonthKey(date: string) {
-  const [, month, year] = date.split('/')
-  return `20${year}-${month}`
-}
-
 function toMonthLabel(monthKey: string) {
   const [year, month] = monthKey.split('-')
   const map: Record<string, string> = {
-    '01': 'Jan',
-    '02': 'Fev',
-    '03': 'Mar',
-    '04': 'Abr',
-    '05': 'Mai',
-    '06': 'Jun',
-    '07': 'Jul',
-    '08': 'Ago',
-    '09': 'Set',
-    '10': 'Out',
-    '11': 'Nov',
-    '12': 'Dez',
+    '01': 'Jan', '02': 'Fev', '03': 'Mar', '04': 'Abr', '05': 'Mai', '06': 'Jun',
+    '07': 'Jul', '08': 'Ago', '09': 'Set', '10': 'Out', '11': 'Nov', '12': 'Dez',
   }
-
   return `${map[month]}/${year.slice(2)}`
 }
 
@@ -653,115 +294,84 @@ function getSystemId(systemName: string) {
   return baseSystem?.id ?? slugify(systemName)
 }
 
-function parseRawLogLine(line: string): RawWestCorpLog | null {
-  const match = line.match(/^(\d{2}\/\d{2}\/\d{2})\s+(\d{2}:\d{2})\s+(.+)$/)
-  if (!match) {
-    return null
-  }
+function pad2(num: number) {
+  return num.toString().padStart(2, '0')
+}
 
-  const [, date, time, remainder] = match
-  const priorityMatch = remainder.match(/\s+(High|Medium|Low)$/)
-  if (!priorityMatch) {
-    return null
-  }
+function getOccurrenceIsoDate(chCode: string, rowHash: number, occurrenceIndex: number, totalOccurrences: number) {
+  const peaks = PEAK_SYSTEMS_BY_CH[chCode] ?? [7, 12, 17, 22, 27]
+  const peakCount = peaks.length
+  const stride = Math.max(1, Math.ceil(totalOccurrences / peakCount))
+  const bucket = Math.floor(occurrenceIndex / stride) % peakCount
+  const baseDay = peaks[bucket]
+  const daySpread = (occurrenceIndex % 3) - 1
+  const day = clamp(baseDay + daySpread, 1, 31)
 
-  const priority = priorityMatch[1] as RawWestCorpLog['priority']
-  const withoutPriority = remainder.slice(0, priorityMatch.index).trim()
+  const hourOffset = (rowHash + occurrenceIndex * 7) % 24
+  const minuteOffset = (rowHash * 3 + occurrenceIndex * 13) % 60
+  return `2026-07-${pad2(day)} ${pad2(hourOffset)}:${pad2(minuteOffset)}`
+}
 
-  const alertTypeOptions = ['Outdoor Error', 'Indoor Error', 'Units disconnected']
-  const alertType = alertTypeOptions.find((option) => withoutPriority.endsWith(option))
-  if (!alertType) {
-    return null
-  }
+function buildAlarmMessage(row: WestCorpAggregatedRow) {
+  const meta = CH_METADATA[row.chCode]
+  const codeOnly = row.chCode.replace(/^CH/, '')
+  const short = meta?.shortTitle ?? 'Alarme'
+  const extra = meta?.description ? ` ${meta.description}` : ''
+  return `${row.chCode} no equipamento ${row.equipmentName} (sistema ${row.systemLabel}). Codigo interno ${codeOnly} - ${short}.${extra}`.trim()
+}
 
-  const withoutAlertType = withoutPriority.slice(0, -alertType.length).trim()
-  const descriptionOptions = ['Outdoor error', 'Indoor error', 'Units disconnected']
-  const description = descriptionOptions.find((option) => withoutAlertType.includes(` ${option} `) || withoutAlertType.endsWith(` ${option}`))
-  if (!description) {
-    return null
-  }
+type ExpandedAlarmSeed = {
+  row: WestCorpAggregatedRow
+  isoDate: string
+  occurrenceNumber: number
+  totalOccurrences: number
+}
 
-  const descriptionIndex = withoutAlertType.indexOf(description)
-  const unitAndSystem = withoutAlertType.slice(0, descriptionIndex).trim()
-  const tail = withoutAlertType.slice(descriptionIndex + description.length).trim()
+const EXPANDED_SEEDS: ExpandedAlarmSeed[] = (() => {
+  const list: ExpandedAlarmSeed[] = []
+  RAW_AGGREGATED_ROWS.forEach((row, rowIndex) => {
+    const rowHash = rowIndex % 1009
+    for (let i = 0; i < row.occurrences; i += 1) {
+      list.push({
+        row,
+        isoDate: getOccurrenceIsoDate(row.chCode, rowHash, i, row.occurrences),
+        occurrenceNumber: i + 1,
+        totalOccurrences: row.occurrences,
+      })
+    }
+  })
+  list.sort((a, b) => (a.isoDate > b.isoDate ? 1 : -1))
+  return list
+})()
 
-  const sortedSystems = [...westCorpSystems.map((item) => item.systemName), 'multiple'].sort((a, b) => b.length - a.length)
-  const matchedSystem = sortedSystems.find((systemName) => normalizeLabel(unitAndSystem).includes(normalizeLabel(systemName)))
-  if (!matchedSystem) {
-    return null
-  }
-
-  const normalizedUnitAndSystem = normalizeLabel(unitAndSystem)
-  const normalizedSystem = normalizeLabel(matchedSystem)
-  const systemIndex = normalizedUnitAndSystem.indexOf(normalizedSystem)
-  const rawParts = unitAndSystem.split(/\s+/)
-  const systemName = matchedSystem === 'multiple'
-    ? (unitAndSystem.includes(' multiple') ? 'multiple' : matchedSystem)
-    : matchedSystem
-
-  let unitName = unitAndSystem
-  if (matchedSystem === 'multiple' && rawParts.length >= 2) {
-    unitName = rawParts[0]
-  } else if (systemIndex > -1) {
-    const before = unitAndSystem.slice(0, unitAndSystem.toLowerCase().indexOf(matchedSystem.toLowerCase())).trim()
-    unitName = before || unitAndSystem.replace(matchedSystem, '').trim()
-  }
-
-  const errorMatch = tail.match(/^(\d+)?\s*(.*)$/)
-  const errorCode = errorMatch?.[1] ?? ''
-  const errorDescription = errorMatch?.[2]?.trim() ?? ''
+export const westCorpAlarms: Alarm[] = EXPANDED_SEEDS.map((seed, index) => {
+  const { row, isoDate, occurrenceNumber, totalOccurrences } = seed
+  const meta = CH_METADATA[row.chCode]
+  const codeOnly = row.chCode.replace(/^CH/, '')
+  const category = meta?.category ?? 'Outdoor Error'
+  const priority = meta?.severity === 'Medium' ? 2 : 1
+  const isCritical = category.includes('Critical') || row.chCode === 'CH21' || row.chCode === 'CH29' || row.chCode === 'CH23' || row.chCode === 'CH26'
+  const alarmType: Alarm['type'] = isCritical ? 'critical' : 'warning'
+  const status: Alarm['status'] = totalOccurrences >= 4 ? 'pending_followup' : 'open'
+  const systemId = getSystemId(row.systemLabel)
 
   return {
-    date,
-    time,
-    unitName: unitName.trim() || 'multiple',
-    systemName,
-    description,
-    errorCode,
-    errorDescription,
-    alertType,
+    id: `wc-jul26-${index + 1}`,
+    equipmentId: `west-system-${systemId}`,
+    equipmentName: row.equipmentName,
+    type: alarmType,
     priority,
-  }
-}
-
-export const westCorpRawLogs: RawWestCorpLog[] = RAW_LOG_LINES
-  .split('\n')
-  .map((line) => line.trim())
-  .filter(Boolean)
-  .map(parseRawLogLine)
-  .filter((entry): entry is RawWestCorpLog => entry !== null)
-
-function buildAlarmMessage(entry: RawWestCorpLog) {
-  const codeText = entry.errorCode ? `codigo ${entry.errorCode}` : 'sem codigo informado'
-  const detailText = entry.errorDescription ? ` ${entry.errorDescription}` : ''
-  return `${entry.alertType} no sistema ${entry.systemName} com ${codeText}.${detailText}`.trim()
-}
-
-const recurrenceMap = westCorpRawLogs.reduce<Map<string, number>>((accumulator, entry) => {
-  const key = [entry.systemName, normalizeLabel(entry.unitName), entry.description, entry.errorCode || 'na', entry.alertType].join('|')
-  accumulator.set(key, (accumulator.get(key) ?? 0) + 1)
-  return accumulator
-}, new Map())
-
-export const westCorpAlarms: Alarm[] = westCorpRawLogs.map((entry, index) => {
-  const recurrenceKey = [entry.systemName, normalizeLabel(entry.unitName), entry.description, entry.errorCode || 'na', entry.alertType].join('|')
-  const recurrence = recurrenceMap.get(recurrenceKey) ?? 1
-  const equipmentId = `west-system-${getSystemId(entry.systemName)}`
-
-  return {
-    id: `west-alarm-${index + 1}`,
-    equipmentId,
-    equipmentName: entry.unitName === 'multiple' ? entry.systemName : entry.unitName,
-    type: 'critical',
-    message: buildAlarmMessage(entry),
-    status: recurrence > 1 || entry.alertType === 'Units disconnected' ? 'pending_followup' : 'open',
-    priority: entry.priority === 'High' ? 1 : entry.priority === 'Medium' ? 2 : 3,
-    createdAt: toIsoDate(entry.date, entry.time),
-    updatedAt: toIsoDate(entry.date, entry.time),
+    status,
+    message: buildAlarmMessage(row),
+    createdAt: isoDate,
+    updatedAt: isoDate,
     clientName: WEST_CORP_CLIENT,
-    areaName: entry.systemName,
-    hasFollowup: recurrence > 1 || entry.alertType === 'Units disconnected',
-    followupCount: recurrence,
+    areaName: row.systemLabel,
+    hasFollowup: totalOccurrences >= 2,
+    followupCount: occurrenceNumber,
+    errorCode: codeOnly,
+    errorCategory: category,
+    rawCode: row.chCode,
   }
 })
 
@@ -770,50 +380,72 @@ type SystemMonthMetrics = {
   systemName: string
   systemId: string
   totalAlerts: number
+  criticalAlerts: number
+  warningAlerts: number
   outdoorAlerts: number
-  disconnectAlerts: number
+  indoorAlerts: number
+  commAlerts: number
+  sensorAlerts: number
   uniqueUnits: Set<string>
   firstDate: string
   lastDate: string
 }
 
-const groupedSystemMonthMetrics = westCorpRawLogs.reduce<Map<string, SystemMonthMetrics>>((accumulator, entry) => {
-  const monthKey = toMonthKey(entry.date)
-  const systemId = getSystemId(entry.systemName)
+const groupedSystemMonthMetrics = RAW_AGGREGATED_ROWS.reduce<Map<string, SystemMonthMetrics>>((accumulator, row) => {
+  const monthKey = '2026-07'
+  const systemId = getSystemId(row.systemLabel)
   const key = `${monthKey}|${systemId}`
+  const meta = CH_METADATA[row.chCode]
+  const category = meta?.category ?? 'Outdoor Error'
+  const isCritical = category === 'Critical Outdoor' || row.chCode === 'CH21' || row.chCode === 'CH29' || row.chCode === 'CH23' || row.chCode === 'CH26'
+  const isOutdoor = category.includes('Outdoor') || category === 'Critical Outdoor'
+  const isIndoor = category.includes('Indoor')
+  const isComm = category === 'Communication Error'
+  const isSensor = category === 'Sensor Alarm'
+
   const current = accumulator.get(key) ?? {
     monthKey,
-    systemName: entry.systemName,
+    systemName: row.systemLabel,
     systemId,
     totalAlerts: 0,
+    criticalAlerts: 0,
+    warningAlerts: 0,
     outdoorAlerts: 0,
-    disconnectAlerts: 0,
+    indoorAlerts: 0,
+    commAlerts: 0,
+    sensorAlerts: 0,
     uniqueUnits: new Set<string>(),
-    firstDate: toIsoDate(entry.date, entry.time),
-    lastDate: toIsoDate(entry.date, entry.time),
+    firstDate: '2026-07-31 23:59',
+    lastDate: '2026-07-01 00:00',
   }
 
-  current.totalAlerts += 1
-  current.outdoorAlerts += entry.alertType === 'Outdoor Error' ? 1 : 0
-  current.disconnectAlerts += entry.alertType === 'Units disconnected' ? 1 : 0
-  current.uniqueUnits.add(normalizeLabel(entry.unitName))
-  current.lastDate = toIsoDate(entry.date, entry.time)
+  current.totalAlerts += row.occurrences
+  current.criticalAlerts += isCritical ? row.occurrences : 0
+  current.warningAlerts += isCritical ? 0 : row.occurrences
+  current.outdoorAlerts += isOutdoor ? row.occurrences : 0
+  current.indoorAlerts += isIndoor ? row.occurrences : 0
+  current.commAlerts += isComm ? row.occurrences : 0
+  current.sensorAlerts += isSensor ? row.occurrences : 0
+  current.uniqueUnits.add(normalizeLabel(row.equipmentName))
   accumulator.set(key, current)
   return accumulator
 }, new Map())
 
 function buildSystemSnapshot(metrics: SystemMonthMetrics): EquipmentMonthlySnapshot {
+  const criticalPenalty = metrics.criticalAlerts * 3.2
   const severityIndex =
-    metrics.totalAlerts * 1.7 +
-    metrics.outdoorAlerts * 1.2 +
-    metrics.disconnectAlerts * 3.5 +
-    metrics.uniqueUnits.size * 0.35
+    metrics.totalAlerts * 0.55 +
+    criticalPenalty +
+    metrics.commAlerts * 1.8 +
+    metrics.outdoorAlerts * 0.9 +
+    metrics.indoorAlerts * 0.6 +
+    metrics.uniqueUnits.size * 0.4
 
-  const health = clamp(98 - severityIndex, 46, 99)
-  const availability = clamp(99 - metrics.totalAlerts * 1.15 - metrics.disconnectAlerts * 4.5 - metrics.outdoorAlerts * 0.8, 52, 99)
-  const comfort = clamp(97 - (metrics.totalAlerts - metrics.outdoorAlerts) * 0.9 - metrics.disconnectAlerts * 3, 55, 99)
-  const performance = clamp(98 - metrics.totalAlerts * 1.05 - metrics.outdoorAlerts * 1.1 - metrics.disconnectAlerts * 2.5, 54, 99)
-  const mttr = Number(clamp(1.8 + metrics.outdoorAlerts * 0.7 + metrics.disconnectAlerts * 1.3 + metrics.totalAlerts * 0.04, 1.8, 18).toFixed(2))
+  const health = clamp(98.5 - severityIndex * 0.22, 44, 99)
+  const availability = clamp(99.4 - metrics.totalAlerts * 0.065 - metrics.criticalAlerts * 0.22 - metrics.commAlerts * 0.18, 52, 99.9)
+  const comfort = clamp(97.8 - metrics.indoorAlerts * 0.25 - metrics.sensorAlerts * 0.22, 55, 99.6)
+  const performance = clamp(98.2 - metrics.totalAlerts * 0.06 - metrics.outdoorAlerts * 0.16 - metrics.commAlerts * 0.15, 54, 99.5)
+  const mttr = Number(clamp(1.9 + metrics.criticalAlerts * 0.08 + metrics.outdoorAlerts * 0.025 + metrics.totalAlerts * 0.006, 1.9, 18).toFixed(2))
 
   return {
     id: `west-system-${metrics.systemId}`,
@@ -829,91 +461,106 @@ function buildSystemSnapshot(metrics: SystemMonthMetrics): EquipmentMonthlySnaps
     status: getHealthStatusText(health) as EquipmentMonthlySnapshot['status'],
     mttr,
     totalOccurrences: metrics.totalAlerts,
-    criticalOccurrences: metrics.totalAlerts,
-    moderateOccurrences: 0,
+    criticalOccurrences: metrics.criticalAlerts,
+    moderateOccurrences: metrics.warningAlerts,
     informativeOccurrences: 0,
-    lastUpdated: metrics.lastDate.split(' ')[0],
+    lastUpdated: '2026-07-31',
     monthKey: metrics.monthKey,
     month: toMonthLabel(metrics.monthKey),
-    startDate: metrics.firstDate.split(' ')[0],
-    endDate: metrics.lastDate.split(' ')[0],
+    startDate: '2026-07-01',
+    endDate: '2026-07-31',
   }
 }
 
 export const westCorpMonthlyEquipmentSnapshots: EquipmentMonthlySnapshot[] = Array.from(groupedSystemMonthMetrics.values())
   .map(buildSystemSnapshot)
-  .sort((a, b) => a.monthKey.localeCompare(b.monthKey) || b.totalOccurrences - a.totalOccurrences)
+  .sort((a, b) => b.totalOccurrences - a.totalOccurrences || a.name.localeCompare(b.name))
 
-export const westCorpMonthlySummaries: MonthlySummary[] = Array.from(
-  westCorpMonthlyEquipmentSnapshots.reduce<Map<string, EquipmentMonthlySnapshot[]>>((accumulator, snapshot) => {
-    const current = accumulator.get(snapshot.monthKey) ?? []
-    current.push(snapshot)
-    accumulator.set(snapshot.monthKey, current)
-    return accumulator
-  }, new Map())
-)
-  .map(([monthKey, snapshots]) => {
-    const count = snapshots.length || 1
-    return {
-      monthKey,
-      month: toMonthLabel(monthKey),
-      startDate: snapshots[0]?.startDate ?? `${monthKey}-01`,
-      endDate: snapshots[snapshots.length - 1]?.endDate ?? `${monthKey}-30`,
-      health: Number((snapshots.reduce((sum, item) => sum + item.health, 0) / count).toFixed(2)),
-      target: 90,
-      availability: Number((snapshots.reduce((sum, item) => sum + item.availability, 0) / count).toFixed(2)),
-      mttr: Number((snapshots.reduce((sum, item) => sum + item.mttr, 0) / count).toFixed(2)),
-      totalOccurrences: snapshots.reduce((sum, item) => sum + item.totalOccurrences, 0),
-      affectedEquipment: snapshots.length,
-    }
-  })
-  .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+export const westCorpMonthlySummaries: MonthlySummary[] = (() => {
+  const monthKey = '2026-07'
+  const snapshots = westCorpMonthlyEquipmentSnapshots
+  const count = snapshots.length || 1
+  return [{
+    monthKey,
+    month: toMonthLabel(monthKey),
+    startDate: '2026-07-01',
+    endDate: '2026-07-31',
+    health: Number((snapshots.reduce((sum, item) => sum + item.health, 0) / count).toFixed(2)),
+    target: 90,
+    availability: Number((snapshots.reduce((sum, item) => sum + item.availability, 0) / count).toFixed(2)),
+    mttr: Number((snapshots.reduce((sum, item) => sum + item.mttr, 0) / count).toFixed(2)),
+    totalOccurrences: snapshots.reduce((sum, item) => sum + item.totalOccurrences, 0),
+    affectedEquipment: snapshots.length,
+  }]
+})()
 
 export const westCorpSiteMonthlySnapshots: SiteMonthlySnapshot[] = westCorpMonthlySummaries.map((summary) => ({
   ...westCorpSite,
   saudeGeral: summary.health,
   disponibilidade: summary.availability,
-  conforto: Number(clamp(summary.health + 1.5, 0, 100).toFixed(2)),
-  performance: Number(clamp(summary.health + 0.8, 0, 100).toFixed(2)),
+  conforto: Number(clamp(summary.health + 1.2, 0, 100).toFixed(2)),
+  performance: Number(clamp(summary.health + 0.9, 0, 100).toFixed(2)),
   ocorrenciasCriticas: summary.totalOccurrences,
-  ultimaAtualizacao: summary.endDate.split('-').reverse().join('/'),
+  ultimaAtualizacao: '31/07/2026',
   monthKey: summary.monthKey,
   month: summary.month,
 }))
 
-const unitRollupMap = westCorpRawLogs.reduce<Map<string, WestCorpUnitHealthRollup>>((accumulator, entry) => {
-  const systemId = getSystemId(entry.systemName)
-  const unitType: WestCorpUnitHealthRollup['unitType'] =
-    entry.unitName === 'multiple' ? 'SYSTEM' : normalizeLabel(entry.unitName).includes('odu') || normalizeLabel(entry.unitName).includes('main') || normalizeLabel(entry.unitName).includes('sub')
+type UnitRollupAgg = {
+  id: string
+  unitName: string
+  systemId: string
+  systemName: string
+  unitType: 'ODU' | 'IDU' | 'SYSTEM'
+  totalAlerts: number
+  criticalAlerts: number
+  warningAlerts: number
+  lastAlertAt: string
+}
+
+const unitRollupMap = RAW_AGGREGATED_ROWS.reduce<Map<string, UnitRollupAgg>>((accumulator, row, rowIndex) => {
+  const systemId = getSystemId(row.systemLabel)
+  const normalizedEquipment = normalizeLabel(row.equipmentName)
+  const unitType: UnitRollupAgg['unitType'] =
+    normalizedEquipment.includes('odu') || normalizedEquipment.includes('main') || normalizedEquipment.endsWith('main') || /\bsub\b/.test(normalizedEquipment)
       ? 'ODU'
-      : 'IDU'
-  const id = `${systemId}-${slugify(entry.unitName)}`
+      : normalizedEquipment.includes('multiple')
+        ? 'SYSTEM'
+        : 'IDU'
+
+  const id = `${systemId}-${slugify(row.equipmentName)}`
+  const lastDate = getOccurrenceIsoDate(row.chCode, rowIndex % 1009, row.occurrences - 1, row.occurrences)
+  const meta = CH_METADATA[row.chCode]
+  const category = meta?.category ?? 'Outdoor Error'
+  const isCritical = category === 'Critical Outdoor' || row.chCode === 'CH21' || row.chCode === 'CH29' || row.chCode === 'CH23' || row.chCode === 'CH26'
+
   const current = accumulator.get(id) ?? {
     id,
-    unitName: entry.unitName,
+    unitName: row.equipmentName,
     systemId,
-    systemName: entry.systemName,
+    systemName: row.systemLabel,
     unitType,
     totalAlerts: 0,
-    health: 98,
-    availability: 99,
-    mttr: 1.2,
-    status: 'Verde',
-    lastAlertAt: toIsoDate(entry.date, entry.time),
+    criticalAlerts: 0,
+    warningAlerts: 0,
+    lastAlertAt: lastDate,
   }
 
-  current.totalAlerts += 1
-  current.lastAlertAt = toIsoDate(entry.date, entry.time)
+  current.totalAlerts += row.occurrences
+  current.criticalAlerts += isCritical ? row.occurrences : 0
+  current.warningAlerts += isCritical ? 0 : row.occurrences
+  current.lastAlertAt = current.lastAlertAt > lastDate ? current.lastAlertAt : lastDate
   accumulator.set(id, current)
   return accumulator
 }, new Map())
 
 export const westCorpUnitHealthRollups: WestCorpUnitHealthRollup[] = Array.from(unitRollupMap.values())
   .map((item) => {
-    const penalty = item.totalAlerts * (item.unitType === 'ODU' ? 3.2 : item.unitType === 'SYSTEM' ? 2.6 : 2.2)
-    const health = clamp(98 - penalty, 40, 99)
-    const availability = clamp(99 - item.totalAlerts * (item.unitType === 'SYSTEM' ? 2.1 : 1.7), 45, 99)
-    const mttr = clamp(1.2 + item.totalAlerts * (item.unitType === 'ODU' ? 0.45 : 0.35), 1.2, 16)
+    const basePenalty = item.totalAlerts * (item.unitType === 'ODU' ? 2.9 : item.unitType === 'SYSTEM' ? 2.4 : 2.15)
+    const criticalPenalty = item.criticalAlerts * (item.unitType === 'ODU' ? 2.2 : 1.6)
+    const health = clamp(98.4 - basePenalty - criticalPenalty, 38, 99)
+    const availability = clamp(99.3 - item.totalAlerts * (item.unitType === 'SYSTEM' ? 0.22 : 0.18) - item.criticalAlerts * 0.32, 44, 99.9)
+    const mttr = clamp(1.6 + item.totalAlerts * 0.032 + item.criticalAlerts * 0.06 + (item.unitType === 'ODU' ? 0.4 : 0), 1.6, 16)
 
     return {
       ...item,
@@ -924,3 +571,9 @@ export const westCorpUnitHealthRollups: WestCorpUnitHealthRollup[] = Array.from(
     }
   })
   .sort((a, b) => b.totalAlerts - a.totalAlerts || a.unitName.localeCompare(b.unitName))
+
+export const westCorpSystemsWithOccurrences = new Set(westCorpMonthlyEquipmentSnapshots.map((item) => item.id))
+
+export function getWestCorpChMeta(code: string) {
+  return CH_METADATA[code]
+}
