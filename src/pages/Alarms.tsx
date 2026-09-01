@@ -1,8 +1,9 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { AlarmsList } from '../components/alarms/AlarmsList'
 import { RecurringAlarms } from '../components/alarms/RecurringAlarms'
+import { AcknowledgmentHeaderCards } from '../components/alarms/AcknowledgeAlarmAction'
 import { equipmentCatalog, findEquipmentCatalogItem } from '@/lib/equipmentCatalog'
 import { mockAlarms } from '../lib/mockData'
 import { sbaTorresBrasilSystems } from '@/lib/sbaTorresBrasilData'
@@ -12,7 +13,10 @@ import { wellnesstecAlarms } from '@/lib/wellnesstecOperationalData'
 import { westCorpSystems } from '@/lib/westCorpData'
 import { westCorpAlarms } from '@/lib/westCorpOperationalData'
 import { useScope } from '@/hooks/useScope'
+import { useAlarmAcknowledgments } from '@/lib/alarmAcknowledgmentStorage'
 import { Alarm, SiteSystemCatalog } from '@/types'
+
+type AcknowledgmentFilter = 'all' | 'active' | 'acknowledged'
 
 const ALL_STRUCTURED_SYSTEMS_FOR_ALARMS: SiteSystemCatalog[] = [
   ...westCorpSystems,
@@ -65,7 +69,9 @@ function findUnitCatalogEntryForAlarm(system: SiteSystemCatalog, unitName: strin
 
 export function Alarms() {
   const { selectedClient, selectedSite } = useScope()
+  const { isAcknowledged } = useAlarmAcknowledgments()
   const [searchParams] = useSearchParams()
+  const [ackFilter, setAckFilter] = useState<AcknowledgmentFilter>('active')
   const selectedEquipmentId = searchParams.get('equipmentId') ?? ''
   const selectedEquipmentName = searchParams.get('equipmentName') ?? ''
   const scopedAlarms = useMemo(() => {
@@ -110,20 +116,75 @@ export function Alarms() {
     return expanded;
   }, [selectedClient, selectedSite])
 
+  const filteredByAck = useMemo(() => {
+    switch (ackFilter) {
+      case 'active':
+        return scopedAlarms.filter((a) => !isAcknowledged(a.id))
+      case 'acknowledged':
+        return scopedAlarms.filter((a) => isAcknowledged(a.id))
+      default:
+        return scopedAlarms
+    }
+  }, [scopedAlarms, ackFilter, isAcknowledged])
+
   const filteredRecurringAlarms = useMemo(() => {
     if (!selectedEquipmentId) {
-      return scopedAlarms
+      return filteredByAck
     }
 
-    return scopedAlarms.filter((alarm) => alarm.equipmentId === selectedEquipmentId)
-  }, [scopedAlarms, selectedEquipmentId])
+    return filteredByAck.filter((alarm) => alarm.equipmentId === selectedEquipmentId)
+  }, [filteredByAck, selectedEquipmentId])
+
+  const FilterChip = ({ value, label, count }: { value: AcknowledgmentFilter; label: string; count: number }) => {
+    const active = ackFilter === value
+    return (
+      <button
+        type="button"
+        onClick={() => setAckFilter(value)}
+        className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+          active
+            ? 'border-primary bg-primary text-white shadow-sm'
+            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+        }`}
+      >
+        <span>{label}</span>
+        <span
+          className={`rounded-full px-1.5 py-0.5 text-[10px] ${
+            active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          {count}
+        </span>
+      </button>
+    )
+  }
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Alarmes</h1>
-          <p className="text-gray-500">Monitoramento e gestao de alarmes do sistema</p>
+          <p className="text-gray-500">
+            Monitoramento e gestao de alarmes do sistema · reconheca alarmes individualmente para ajustar a saude do site
+          </p>
+        </div>
+
+        <AcknowledgmentHeaderCards alarms={scopedAlarms} />
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <FilterChip value="active" label="Ativos" count={scopedAlarms.filter((a) => !isAcknowledged(a.id)).length} />
+            <FilterChip value="acknowledged" label="Reconhecidos" count={scopedAlarms.filter((a) => isAcknowledged(a.id)).length} />
+            <FilterChip value="all" label="Todos" count={scopedAlarms.length} />
+          </div>
+          {selectedEquipmentId && (
+            <Link
+              to="/alarms"
+              className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Limpar filtro
+            </Link>
+          )}
         </div>
 
         {selectedEquipmentId && (
@@ -132,21 +193,16 @@ export function Alarms() {
               <p className="text-sm font-semibold text-gray-900">Detalhes do alarme por equipamento</p>
               <p className="text-sm text-gray-600">{selectedEquipmentName}</p>
             </div>
-            <Link
-              to="/alarms"
-              className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Limpar filtro
-            </Link>
           </div>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <AlarmsList
-              alarms={scopedAlarms}
+              alarms={filteredByAck}
               selectedEquipmentId={selectedEquipmentId}
               selectedEquipmentName={selectedEquipmentName}
+              viewMode={ackFilter}
             />
           </div>
           <div className="lg:col-span-1">

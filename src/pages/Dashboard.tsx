@@ -8,7 +8,7 @@ import { RankingView } from '@/components/dashboard/RankingView'
 import { SiteMap } from '@/components/dashboard/SiteMap'
 import { RecurringAlarms } from '@/components/alarms/RecurringAlarms'
 import { useScope } from '@/hooks/useScope'
-import { equipmentCatalog } from '@/lib/equipmentCatalog'
+import { equipmentCatalog, findEquipmentCatalogItem } from '@/lib/equipmentCatalog'
 import { loadKanbanStates, MAINTENANCE_WORKFLOW_UPDATED_EVENT } from '@/lib/maintenanceWorkflowStorage'
 import { loadAllPredictiveTasks } from '@/lib/predictiveTaskStorage'
 import {
@@ -19,6 +19,7 @@ import {
 } from '@/lib/mockData'
 import { Alarm, Equipment, EquipmentJustification, SiteLocation, SystemRanking } from '@/types'
 import { buildEquipmentJustification, getHealthStatusText } from '@/lib/utils'
+import { useAlarmAcknowledgments, applyAckDiscountToHealth } from '@/lib/alarmAcknowledgmentStorage'
 import {
   sbaTorresBrasilAlarms,
   sbaTorresBrasilMonthlyEquipmentSnapshots,
@@ -363,6 +364,7 @@ function applyKanbanAlarmState(alarm: Alarm, kanbanStates: ReturnType<typeof loa
 
 export function Dashboard() {
   const { selectedClient, selectedSite, availableClients, availableSites } = useScope()
+  const { ackStore, weightStore } = useAlarmAcknowledgments()
   const [workflowVersion, setWorkflowVersion] = useState(0)
   const allEquipmentSnapshots = useMemo(
     () => [
@@ -411,6 +413,18 @@ export function Dashboard() {
     })
   }, [])
   const allAlarms = useMemo(() => [...mockAlarms, ...westCorpAlarms, ...sbaTorresBrasilAlarms, ...wellnesstecAlarms], [])
+  const dashboardAlarmsScoped = useMemo(() => {
+    const baseAlarms = allAlarms
+    const out: Alarm[] = []
+    baseAlarms.forEach((alarm) => {
+      const alarmEquipment = findEquipmentCatalogItem(alarm.equipmentId)
+      const matchesClient = selectedClient === 'all-clients' || alarm.clientName === selectedClient
+      const matchesSite = selectedSite === 'all-sites' || (alarmEquipment?.siteId === selectedSite)
+      if (!matchesClient || !matchesSite) return
+      out.push(alarm)
+    })
+    return out
+  }, [allAlarms, selectedClient, selectedSite])
   const allPredictiveTasks = useMemo(() => loadAllPredictiveTasks(), [])
   const allScopedSummaries = useMemo(() => {
     const grouped = new Map<string, typeof allEquipmentSnapshots>()
@@ -686,8 +700,29 @@ export function Dashboard() {
       return []
     }
 
+    const alarmBySiteMap = new Map<string, Alarm[]>()
+    dashboardAlarmsScoped.forEach((alarm) => {
+      const cat = findEquipmentCatalogItem(alarm.equipmentId)
+      if (!cat?.siteId) return
+      const arr = alarmBySiteMap.get(cat.siteId) ?? []
+      arr.push(alarm)
+      alarmBySiteMap.set(cat.siteId, arr)
+    })
+
+    function applyDiscount(site: SiteLocation): SiteLocation {
+      const siteAlarms = alarmBySiteMap.get(site.siteId) ?? []
+      const result = applyAckDiscountToHealth(site.saudeGeral, site.disponibilidade, siteAlarms, ackStore, weightStore)
+      return {
+        ...site,
+        saudeGeral: result.health,
+        disponibilidade: result.availability,
+      }
+    }
+
     if (selectedSummaries.length === 0) {
-      return allCurrentSites.filter((site) => isSiteScoped(site, selectedClient, selectedSite))
+      return allCurrentSites
+        .filter((site) => isSiteScoped(site, selectedClient, selectedSite))
+        .map(applyDiscount)
     }
 
     const monthKeys = new Set(selectedSummaries.map((summary) => summary.monthKey))
@@ -699,7 +734,9 @@ export function Dashboard() {
     })
 
     if (scopedSiteSnapshots.length === 0) {
-      return allCurrentSites.filter((site) => isSiteScoped(site, selectedClient, selectedSite))
+      return allCurrentSites
+        .filter((site) => isSiteScoped(site, selectedClient, selectedSite))
+        .map(applyDiscount)
     }
 
     const groupedSites = new Map<string, SiteLocation & { _count: number }>()
@@ -725,15 +762,17 @@ export function Dashboard() {
       groupedSites.set(snapshot.siteId, current)
     })
 
-    return Array.from(groupedSites.values()).map(({ _count, ...site }) => ({
-      ...site,
-      saudeGeral: Number((site.saudeGeral / _count).toFixed(2)),
-      disponibilidade: Number((site.disponibilidade / _count).toFixed(2)),
-      conforto: Number((site.conforto / _count).toFixed(2)),
-      performance: Number((site.performance / _count).toFixed(2)),
-      ocorrenciasCriticas: Number((site.ocorrenciasCriticas / _count).toFixed(0)),
-    }))
-  }, [allCurrentSites, allSiteSnapshots, selectedClient, selectedSite, selectedSummaries])
+    return Array.from(groupedSites.values())
+      .map(({ _count, ...site }: SiteLocation & { _count: number }) => ({
+        ...site,
+        saudeGeral: Number((site.saudeGeral / _count).toFixed(2)),
+        disponibilidade: Number((site.disponibilidade / _count).toFixed(2)),
+        conforto: Number((site.conforto / _count).toFixed(2)),
+        performance: Number((site.performance / _count).toFixed(2)),
+        ocorrenciasCriticas: Number((site.ocorrenciasCriticas / _count).toFixed(0)),
+      }))
+      .map((s) => applyDiscount(s as SiteLocation))
+  }, [allCurrentSites, allSiteSnapshots, selectedClient, selectedSite, selectedSummaries, ackStore, weightStore, dashboardAlarmsScoped])
 
   const visibleSiteSummaries = siteSummaries
 

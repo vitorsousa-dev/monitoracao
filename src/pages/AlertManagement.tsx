@@ -1,9 +1,11 @@
 import { DragEvent, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, CalendarClock, GripVertical, Wrench } from 'lucide-react'
+import { AlertTriangle, CalendarClock, GripVertical, Wrench, ChevronDown, ChevronUp, ShieldCheck, ShieldAlert, TrendingUp } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { useScope } from '@/hooks/useScope'
 import { useAuth } from '@/hooks/useAuth'
+import { AcknowledgeAlarmAction } from '@/components/alarms/AcknowledgeAlarmAction'
+import { AcknowledgmentHeaderCards } from '@/components/alarms/AcknowledgeAlarmAction'
 import { equipmentCatalog, findEquipmentCatalogItem } from '@/lib/equipmentCatalog'
 import { loadEquipmentSchedules, loadKanbanStates, moveEquipmentKanbanCard } from '@/lib/maintenanceWorkflowStorage'
 import { mockAlarms } from '@/lib/mockData'
@@ -14,6 +16,7 @@ import { wellnesstecSystems } from '@/lib/wellnesstecData'
 import { wellnesstecAlarms } from '@/lib/wellnesstecOperationalData'
 import { westCorpSystems } from '@/lib/westCorpData'
 import { westCorpAlarms } from '@/lib/westCorpOperationalData'
+import { useAlarmAcknowledgments, applyAckDiscountToHealth } from '@/lib/alarmAcknowledgmentStorage'
 import { AlertKanbanColumn, Alarm, EquipmentHistoryTarget, MaintenanceSchedule, PredictiveTask, SiteSystemCatalog } from '@/types'
 
 type BoardCard = {
@@ -194,9 +197,43 @@ function getColumnFromAnomalies(anomalies: PredictiveTask[]): AlertKanbanColumn 
 export function AlertManagement() {
   const { selectedClient, selectedSite } = useScope()
   const { user } = useAuth()
+  const { ackStore, weightStore, isAcknowledged } = useAlarmAcknowledgments()
   const [version, setVersion] = useState(0)
   const [draggingId, setDraggingId] = useState<string | null>(null)
-  const kanbanStates = useMemo(() => loadKanbanStates(), [version])
+  const [viewMode, setViewMode] = useState<'active' | 'acknowledged' | 'all'>('active')
+  const [expandedAlarmsFor, setExpandedAlarmsFor] = useState<Record<string, boolean>>({})
+  const kanbanStates = useMemo(() => loadKanbanStates(), [version, ackStore])
+
+  const flatAllAlarms = useMemo(() => {
+    const pool = [...mockAlarms, ...westCorpAlarms, ...sbaTorresBrasilAlarms, ...wellnesstecAlarms]
+    const expanded: Alarm[] = []
+    pool.forEach((alarm) => {
+      if (!isAlarmScoped(alarm, selectedClient, selectedSite)) return
+      expanded.push(alarm)
+      const alarmEquipment = findEquipmentCatalogItem(alarm.equipmentId)
+      if (alarmEquipment && (alarmEquipment.source === 'equipment' || alarmEquipment.source.endsWith('-unit'))) {
+        return
+      }
+      const system = findSystemForAlarm(alarm)
+      if (!system) return
+      const systemMatchesClient = selectedClient === 'all-clients' || system.client === selectedClient
+      const systemMatchesSite = selectedSite === 'all-sites' || system.siteId === selectedSite
+      if (!systemMatchesClient || !systemMatchesSite) return
+      system.internalUnits.forEach((unitName) => {
+        const unitEntry = findUnitCatalogEntry(system, unitName)
+        if (unitEntry) {
+          expanded.push({
+            ...alarm,
+            id: `${alarm.id}--${unitEntry.id}`,
+            equipmentId: unitEntry.id,
+            equipmentName: unitEntry.name,
+            areaName: system.systemName,
+          })
+        }
+      })
+    })
+    return expanded
+  }, [selectedClient, selectedSite])
 
   const boardCards = useMemo(() => {
     const groupedAlarms = groupScopedAlarms(selectedClient, selectedSite)
@@ -262,6 +299,22 @@ export function AlertManagement() {
       })
   }, [kanbanStates, selectedClient, selectedSite])
 
+  const filteredCardsByView = useMemo(
+    () =>
+      boardCards.map((card) => {
+        const alarmsFiltered = card.alarms.filter((a) => {
+          if (viewMode === 'active') return !isAcknowledged(a.id)
+          if (viewMode === 'acknowledged') return isAcknowledged(a.id)
+          return true
+        })
+        return { ...card, alarms: alarmsFiltered }
+      }).filter((card) => {
+        if (viewMode === 'acknowledged') return card.alarms.length > 0 || card.anomalies.length > 0 || card.openSchedules.length > 0
+        return card.alarms.length > 0 || card.anomalies.length > 0 || card.openSchedules.length > 0
+      }),
+    [boardCards, viewMode, isAcknowledged]
+  )
+
   const canManageBoard = user?.role === 'admin' || user?.role === 'manager'
 
   const handleDrop = (event: DragEvent<HTMLDivElement>, nextColumn: AlertKanbanColumn) => {
@@ -283,6 +336,33 @@ export function AlertManagement() {
     setVersion((current) => current + 1)
   }
 
+  const FilterChip = ({ value, label, count }: { value: 'active' | 'acknowledged' | 'all'; label: string; count: number }) => {
+    const active = viewMode === value
+    return (
+      <button
+        type="button"
+        onClick={() => setViewMode(value)}
+        className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+          active
+            ? 'border-primary bg-primary text-white shadow-sm'
+            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+        }`}
+      >
+        <span>{label}</span>
+        <span
+          className={`rounded-full px-1.5 py-0.5 text-[10px] ${
+            active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          {count}
+        </span>
+      </button>
+    )
+  }
+
+  const countActive = flatAllAlarms.filter((a) => !isAcknowledged(a.id)).length
+  const countAck = flatAllAlarms.filter((a) => isAcknowledged(a.id)).length
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -290,12 +370,27 @@ export function AlertManagement() {
           <h1 className="text-2xl font-bold text-gray-900">Gestao de Alertas</h1>
           <p className="text-gray-500">
             Kanban operacional dos equipamentos com alertas ativos, anomalias preditivas e agendamentos abertos no escopo atual.
+            Reconheca alarmes para ajustar a saude do site em tempo real.
           </p>
+        </div>
+
+        <AcknowledgmentHeaderCards alarms={flatAllAlarms} />
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <FilterChip value="active" label="Ativos (lista de impacto)" count={countActive} />
+            <FilterChip value="acknowledged" label="Reconhecidos" count={countAck} />
+            <FilterChip value="all" label="Todos" count={flatAllAlarms.length} />
+          </div>
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            {viewMode === 'active' && <span className="inline-flex items-center gap-1"><ShieldAlert className="h-3.5 w-3.5 text-danger" /> Impactando a saude do site</span>}
+            {viewMode === 'acknowledged' && <span className="inline-flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5 text-success" /> Desconto aplicado no calculo</span>}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
           {COLUMN_META.map((column) => {
-            const cards = boardCards.filter((card) => card.column === column.id)
+            const cards = filteredCardsByView.filter((card) => card.column === column.id)
 
             return (
               <div
@@ -316,7 +411,15 @@ export function AlertManagement() {
 
                 <div className="space-y-3">
                   {cards.length > 0 ? (
-                    cards.map((card) => (
+                    cards.map((card) => {
+                      const original = boardCards.find((o) => o.equipment.id === card.equipment.id)
+                      const allAlarmsForEquipment = original?.alarms ?? []
+                      const activeCount = allAlarmsForEquipment.filter((a) => !isAcknowledged(a.id)).length
+                      const ackedCount = allAlarmsForEquipment.filter((a) => isAcknowledged(a.id)).length
+                      const discount = applyAckDiscountToHealth(card.equipment.health, card.equipment.availability, allAlarmsForEquipment, ackStore, weightStore)
+                      const expanded = expandedAlarmsFor[card.equipment.id]
+                      const statusColor = discount.health >= 90 ? 'text-success' : discount.health >= 72 ? 'text-warning' : 'text-danger'
+                      return (
                       <div
                         key={card.equipment.id}
                         draggable={canManageBoard}
@@ -340,17 +443,36 @@ export function AlertManagement() {
                               {card.equipment.siteName ? ` • ${card.equipment.siteName}` : ''}
                             </p>
                           </div>
-                          <span className="rounded-full bg-danger/10 px-3 py-1 text-xs font-semibold text-danger">
-                            {card.alarms.length > 0
-                              ? `${card.alarms.length} alertas`
-                              : `${card.anomalies.length} anomalias`}
-                          </span>
+                          <div className="flex flex-col items-end gap-1">
+                            {activeCount > 0 && (
+                              <span className="rounded-full bg-danger/10 px-3 py-1 text-xs font-semibold text-danger">
+                                {activeCount} ativos
+                              </span>
+                            )}
+                            {ackedCount > 0 && (
+                              <span className="rounded-full bg-success/10 px-3 py-1 text-xs font-semibold text-success">
+                                {ackedCount} reconhecidos
+                              </span>
+                            )}
+                            {activeCount === 0 && ackedCount === 0 && card.anomalies.length > 0 && (
+                              <span className="rounded-full bg-warning/10 px-3 py-1 text-xs font-semibold text-warning">
+                                {card.anomalies.length} anomalias
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="mt-4 grid grid-cols-3 gap-3 text-center">
                           <div className="rounded-xl bg-slate-50 p-3">
-                            <p className="text-xs text-gray-500">Saúde</p>
+                            <p className="text-xs text-gray-500">Saude base</p>
                             <p className="mt-1 text-lg font-bold text-gray-900">{card.equipment.health}%</p>
+                            <p className={`text-[11px] font-semibold ${statusColor} inline-flex items-center gap-1`}>
+                              <TrendingUp className="h-3 w-3" />
+                              Ajust. {discount.health.toFixed(1)}%
+                              {discount.health > card.equipment.health && (
+                                <span className="text-success">(+{(discount.health - card.equipment.health).toFixed(1)})</span>
+                              )}
+                            </p>
                           </div>
                           <div className="rounded-xl bg-slate-50 p-3">
                             <p className="text-xs text-gray-500">Anomalias</p>
@@ -392,6 +514,52 @@ export function AlertManagement() {
                           </p>
                         )}
 
+                        {allAlarmsForEquipment.length > 0 && (
+                          <div className="mt-4 rounded-xl border border-gray-200 bg-slate-50/60 p-3">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedAlarmsFor((prev) => ({ ...prev, [card.equipment.id]: !prev[card.equipment.id] }))
+                              }
+                              className="flex w-full items-center justify-between text-left text-xs font-semibold text-gray-700 hover:text-gray-900"
+                            >
+                              <span className="flex items-center gap-2">
+                                <AlertTriangle className="h-3.5 w-3.5 text-warning" />
+                                Lista de alarmes ({allAlarmsForEquipment.length}) · ativos {activeCount}, reconhecidos {ackedCount}
+                              </span>
+                              {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                            </button>
+                            {expanded && (
+                              <div className="mt-3 space-y-2">
+                                {allAlarmsForEquipment.map((alarm) => {
+                                  const acked = isAcknowledged(alarm.id)
+                                  if (viewMode === 'active' && acked) return null
+                                  if (viewMode === 'acknowledged' && !acked) return null
+                                  return (
+                                    <div key={alarm.id} className={`rounded-lg border p-2.5 text-xs ${acked ? 'border-success/20 bg-success/5' : 'border-gray-200 bg-white'}`}>
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                          <div className="flex flex-wrap items-center gap-1.5">
+                                            <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${alarm.type === 'critical' ? 'bg-danger/10 text-danger' : alarm.type === 'warning' ? 'bg-warning/10 text-warning' : 'bg-primary/10 text-primary'}`}>
+                                              {alarm.type === 'critical' ? 'CRITICO' : alarm.type === 'warning' ? 'AVISO' : 'INFO'}
+                                            </span>
+                                            <span className="truncate font-medium text-gray-900">{alarm.equipmentName}</span>
+                                          </div>
+                                          <p className="mt-1 line-clamp-2 text-gray-600">{alarm.message}</p>
+                                          <p className="mt-0.5 text-[10px] text-gray-500">
+                                            {alarm.createdAt} • {alarm.clientName} • {alarm.areaName}
+                                          </p>
+                                        </div>
+                                        <AcknowledgeAlarmAction alarm={alarm as any} compact />
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <div className="mt-4 flex flex-wrap gap-2">
                           <Link
                             to={`/equipment/${card.equipment.id}?tab=scheduling`}
@@ -409,7 +577,7 @@ export function AlertManagement() {
                           </Link>
                         </div>
                       </div>
-                    ))
+                    )})
                   ) : (
                     <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center">
                       <AlertTriangle className="mx-auto h-6 w-6 text-gray-300" />

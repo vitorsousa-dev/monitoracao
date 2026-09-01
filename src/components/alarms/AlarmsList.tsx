@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react'
 import { Alarm } from '../../types'
-import { AlertTriangle, AlertCircle, Info, CheckCircle, Clock, ChevronDown, ChevronUp } from 'lucide-react'
+import { AlertTriangle, AlertCircle, Info, CheckCircle, Clock, ChevronDown, ChevronUp, ShieldAlert } from 'lucide-react'
+import { AcknowledgeAlarmAction } from './AcknowledgeAlarmAction'
 
 interface AlarmsListProps {
   alarms: Alarm[]
   selectedEquipmentId?: string
   selectedEquipmentName?: string
+  viewMode?: 'all' | 'active' | 'acknowledged'
 }
 
-export function AlarmsList({ alarms, selectedEquipmentId, selectedEquipmentName }: AlarmsListProps) {
+export function AlarmsList({ alarms, selectedEquipmentId, selectedEquipmentName, viewMode }: AlarmsListProps) {
   const [showAll, setShowAll] = useState(false)
   const [expandedAlarmIds, setExpandedAlarmIds] = useState<string[]>([])
 
@@ -90,16 +92,30 @@ export function AlarmsList({ alarms, selectedEquipmentId, selectedEquipmentName 
     <div className="bg-white rounded-xl border border-gray-200 p-6">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">Todos os Alarmes</h3>
+          <h3 className="text-lg font-semibold text-gray-900">
+            {viewMode === 'acknowledged' ? 'Alarmes reconhecidos' : viewMode === 'active' ? 'Alarmes ativos (lista de impacto)' : 'Todos os Alarmes'}
+          </h3>
           <p className="mt-1 text-sm text-gray-500">
             {filteredAlarms.length} registros no periodo
           </p>
         </div>
-        {selectedEquipmentId && (
-          <p className="text-sm text-gray-500 mt-1">
-            Exibindo detalhes de alarme para {selectedEquipmentName}
-          </p>
-        )}
+        <div className="flex flex-col items-end gap-1 text-right">
+          {selectedEquipmentId && (
+            <p className="text-sm text-gray-500">
+              Exibindo detalhes de alarme para {selectedEquipmentName}
+            </p>
+          )}
+          {viewMode === 'active' && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-danger/10 px-2.5 py-0.5 text-[11px] font-semibold text-danger">
+              <ShieldAlert className="h-3 w-3" /> Em analise de impacto
+            </span>
+          )}
+          {viewMode === 'acknowledged' && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-0.5 text-[11px] font-semibold text-success">
+              <CheckCircle className="h-3 w-3" /> Saem do calculo de saude
+            </span>
+          )}
+        </div>
       </div>
       <div className="space-y-3">
         {visibleAlarms.map((alarm) => {
@@ -144,6 +160,7 @@ export function AlarmsList({ alarms, selectedEquipmentId, selectedEquipmentName 
               <div className="flex shrink-0 flex-col items-end gap-2">
                 {getStatusIcon(alarm.status)}
                 <span className="text-xs text-gray-500">Prio: {alarm.priority}</span>
+                <AcknowledgeAlarmAction alarm={alarm as any} compact />
                 <button
                   type="button"
                   onClick={() => toggleAlarmDetails(alarm.id)}

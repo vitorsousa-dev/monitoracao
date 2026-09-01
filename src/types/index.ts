@@ -128,6 +128,9 @@ export interface Alarm {
   areaName: string
   hasFollowup: boolean
   followupCount: number
+  errorCode?: string
+  errorCategory?: string
+  rawCode?: string
 }
 
 export interface PredictiveTask {
