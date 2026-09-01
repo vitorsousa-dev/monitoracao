@@ -669,21 +669,86 @@ export function Dashboard() {
     weightStore,
   ])
 
-  const rankingData = useMemo<SystemRanking[]>(() => {
-    return aggregatedEquipment.map((equipment, index) => ({
-      id: equipment.id,
-      equipmentId: equipment.id,
-      equipmentName: equipment.name,
-      clientName: equipment.client,
-      systemName: `${equipment.area} • ${equipment.name}`,
-      totalAlarms: equipment.totalOccurrences,
-      criticalAlarms: equipment.criticalOccurrences,
-      healthScore: equipment.health,
-      availability: equipment.availability,
+  const rankingLive = useMemo(() => {
+    const perEquipment = new Map<string, {
+      active: number
+      criticalActive: number
+      acked: number
+      name: string
+      area: string
+      client: string
+      healthTotal: number
+      healthCount: number
+      availTotal: number
+      availCount: number
+    }>()
+
+    dashboardAlarmsScoped.forEach((alarm) => {
+      const acked = !!ackStore[alarm.id]
+      const existing = perEquipment.get(alarm.equipmentId)
+      const equip = findEquipmentCatalogItem(alarm.equipmentId)
+      if (!existing) {
+        const snap = selectedSnapshots.find((s) => s.id === alarm.equipmentId)
+        perEquipment.set(alarm.equipmentId, {
+          active: acked ? 0 : 1,
+          criticalActive: !acked && alarm.type === 'critical' ? 1 : 0,
+          acked: acked ? 1 : 0,
+          name: alarm.equipmentName ?? equip?.name ?? alarm.equipmentId,
+          area: equip?.area ?? alarm.areaName ?? '',
+          client: alarm.clientName ?? equip?.client ?? '',
+          healthTotal: snap?.health ?? 76,
+          healthCount: snap ? 1 : 0,
+          availTotal: snap?.availability ?? 94,
+          availCount: snap ? 1 : 0,
+        })
+      } else {
+        if (acked) existing.acked += 1
+        else {
+          existing.active += 1
+          if (alarm.type === 'critical') existing.criticalActive += 1
+        }
+        const snap = selectedSnapshots.find((s) => s.id === alarm.equipmentId)
+        if (snap) {
+          existing.healthTotal += snap.health
+          existing.healthCount += 1
+          existing.availTotal += snap.availability
+          existing.availCount += 1
+        }
+      }
+    })
+
+    const rows: Array<SystemRanking & { ackedCount: number }> = []
+    for (const [id, data] of perEquipment.entries()) {
+      if (data.active === 0) continue
+      const equipAlarms = dashboardAlarmsScoped.filter((a) => a.equipmentId === id)
+      const baseHealth = data.healthCount > 0 ? data.healthTotal / Math.max(1, data.healthCount) : 78
+      const baseAvail = data.availCount > 0 ? data.availTotal / Math.max(1, data.availCount) : 94
+      const discount = applyAckDiscountToHealth(baseHealth, baseAvail, equipAlarms, ackStore, weightStore)
+      rows.push({
+        id,
+        equipmentId: id,
+        equipmentName: data.name,
+        clientName: data.client,
+        systemName: `${data.area} • ${data.name}`.replace(/^ \u2022 /, '').trim(),
+        totalAlarms: data.active,
+        criticalAlarms: data.criticalActive,
+        healthScore: Number(discount.health.toFixed(2)),
+        availability: Number(discount.availability.toFixed(2)),
+        rank: 0,
+        trend: 'stable',
+        ackedCount: data.acked,
+      })
+    }
+
+    rows.sort((a, b) => b.totalAlarms - a.totalAlarms || a.healthScore - b.healthScore)
+    return rows.map((row, index) => ({
+      ...row,
       rank: index + 1,
-      trend: index === 0 ? 'down' : index === 1 ? 'stable' : 'up',
+      trend: (index === 0 ? 'down' : index === 1 ? 'stable' : 'up') as 'up' | 'down' | 'stable',
     }))
-  }, [aggregatedEquipment])
+  }, [dashboardAlarmsScoped, ackStore, weightStore, selectedSnapshots])
+
+  const rankingData = useMemo<SystemRanking[]>(() => rankingLive, [rankingLive])
 
   const filteredAlarms = useMemo(() => {
     if (selectedSummaries.length === 0) {
@@ -1387,18 +1452,9 @@ export function Dashboard() {
           <UptimeChart data={selectedSummaries.map(({ month, availability }) => ({ month, availability }))} />
         </div>
         
-        <RankingView rankings={dashboardAggregatedEquipment.map((equipment, index) => ({
-          id: equipment.id,
-          equipmentId: equipment.id,
-          equipmentName: equipment.name,
-          clientName: equipment.client,
-          systemName: `${equipment.area} • ${equipment.name}`,
-          totalAlarms: equipment.totalOccurrences,
-          criticalAlarms: equipment.criticalOccurrences,
-          healthScore: equipment.health,
-          availability: equipment.availability,
-          rank: index + 1,
-          trend: index === 0 ? 'down' : index === 1 ? 'stable' : 'up',
+        <RankingView rankings={rankingLive.map((row) => ({
+          ...row,
+          ackedCount: row.ackedCount,
         }))} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
