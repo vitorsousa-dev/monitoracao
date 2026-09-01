@@ -139,6 +139,54 @@ export function useAlarmAcknowledgments() {
     []
   )
 
+  const acknowledgeMany = useCallback(
+    (
+      alarmIds: string[],
+      params: {
+        by: string
+        decision: AcknowledgmentDecision
+        notes?: string
+        impactDeductionPct?: number
+      }
+    ) => {
+      if (alarmIds.length === 0) return 0
+      const store = loadAck()
+      const impactPct = params.impactDeductionPct ?? defaultDeductionForDecision(params.decision)
+      const now = new Date().toISOString()
+      let added = 0
+      for (const id of alarmIds) {
+        if (!store[id]) {
+          added += 1
+        }
+        store[id] = {
+          alarmId: id,
+          acknowledgedAt: now,
+          acknowledgedBy: params.by,
+          decision: params.decision,
+          notes: params.notes,
+          impactDeductionPct: impactPct,
+        }
+      }
+      saveAck(store)
+      return added
+    },
+    []
+  )
+
+  const unacknowledgeMany = useCallback((alarmIds: string[]) => {
+    if (alarmIds.length === 0) return 0
+    const store = loadAck()
+    let removed = 0
+    for (const id of alarmIds) {
+      if (store[id]) {
+        delete store[id]
+        removed += 1
+      }
+    }
+    saveAck(store)
+    return removed
+  }, [])
+
   const unacknowledge = useCallback((alarmId: string) => {
     const store = loadAck()
     delete store[alarmId]
@@ -169,7 +217,9 @@ export function useAlarmAcknowledgments() {
     ackStore: ack,
     weightStore: weights,
     acknowledge,
+    acknowledgeMany,
     unacknowledge,
+    unacknowledgeMany,
     isAcknowledged,
     getAck,
     setChWeightOverride,

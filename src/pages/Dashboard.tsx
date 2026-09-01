@@ -413,18 +413,6 @@ export function Dashboard() {
     })
   }, [])
   const allAlarms = useMemo(() => [...mockAlarms, ...westCorpAlarms, ...sbaTorresBrasilAlarms, ...wellnesstecAlarms], [])
-  const dashboardAlarmsScoped = useMemo(() => {
-    const baseAlarms = allAlarms
-    const out: Alarm[] = []
-    baseAlarms.forEach((alarm) => {
-      const alarmEquipment = findEquipmentCatalogItem(alarm.equipmentId)
-      const matchesClient = selectedClient === 'all-clients' || alarm.clientName === selectedClient
-      const matchesSite = selectedSite === 'all-sites' || (alarmEquipment?.siteId === selectedSite)
-      if (!matchesClient || !matchesSite) return
-      out.push(alarm)
-    })
-    return out
-  }, [allAlarms, selectedClient, selectedSite])
   const allPredictiveTasks = useMemo(() => loadAllPredictiveTasks(), [])
   const allScopedSummaries = useMemo(() => {
     const grouped = new Map<string, typeof allEquipmentSnapshots>()
@@ -528,6 +516,32 @@ export function Dashboard() {
       return matchesMonth && matchesClient && matchesSite
     })
   }, [allEquipmentSnapshots, selectedClient, selectedSite, selectedSummaries])
+
+  const dashboardAlarmsScoped = useMemo(() => {
+    const effectiveMonthKeys: Set<string> = (() => {
+      if (selectedSummaries.length > 0) {
+        return new Set(selectedSummaries.map((s) => s.monthKey))
+      }
+      if (allScopedSummaries.length > 0) {
+        return new Set([allScopedSummaries[allScopedSummaries.length - 1].monthKey])
+      }
+      return new Set()
+    })()
+    const baseAlarms = allAlarms
+    const out: Alarm[] = []
+    baseAlarms.forEach((alarm) => {
+      const alarmEquipment = findEquipmentCatalogItem(alarm.equipmentId)
+      const matchesClient = selectedClient === 'all-clients' || alarm.clientName === selectedClient
+      const matchesSite = selectedSite === 'all-sites' || (alarmEquipment?.siteId === selectedSite)
+      if (!matchesClient || !matchesSite) return
+      if (effectiveMonthKeys.size > 0) {
+        const createdMonth = (alarm.createdAt ?? '').slice(0, 7)
+        if (!effectiveMonthKeys.has(createdMonth)) return
+      }
+      out.push(alarm)
+    })
+    return out
+  }, [allAlarms, allScopedSummaries, selectedClient, selectedSite, selectedSummaries])
 
   const aggregatedEquipment = useMemo(() => {
     const equipmentMap = new Map<string, Equipment & { _count: number }>()

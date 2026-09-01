@@ -6,6 +6,7 @@ import { useScope } from '@/hooks/useScope'
 import { useAuth } from '@/hooks/useAuth'
 import { AcknowledgeAlarmAction } from '@/components/alarms/AcknowledgeAlarmAction'
 import { AcknowledgmentHeaderCards } from '@/components/alarms/AcknowledgeAlarmAction'
+import { BatchAcknowledgeButton } from '@/components/alarms/BatchAcknowledgeButton'
 import { equipmentCatalog, findEquipmentCatalogItem } from '@/lib/equipmentCatalog'
 import { loadEquipmentSchedules, loadKanbanStates, moveEquipmentKanbanCard } from '@/lib/maintenanceWorkflowStorage'
 import { mockAlarms } from '@/lib/mockData'
@@ -382,9 +383,17 @@ export function AlertManagement() {
             <FilterChip value="acknowledged" label="Reconhecidos" count={countAck} />
             <FilterChip value="all" label="Todos" count={flatAllAlarms.length} />
           </div>
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            {viewMode === 'active' && <span className="inline-flex items-center gap-1"><ShieldAlert className="h-3.5 w-3.5 text-danger" /> Impactando a saude do site</span>}
-            {viewMode === 'acknowledged' && <span className="inline-flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5 text-success" /> Desconto aplicado no calculo</span>}
+          <div className="flex flex-wrap items-center gap-2">
+            {viewMode !== 'acknowledged' && (
+              <BatchAcknowledgeButton
+                alarms={viewMode === 'active' ? flatAllAlarms.filter((a) => !isAcknowledged(a.id)) : flatAllAlarms}
+                scopeTitle={viewMode === 'active' ? 'da visualizacao ATIVA' : 'ATIVOS do escopo atual'}
+              />
+            )}
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              {viewMode === 'active' && <span className="inline-flex items-center gap-1"><ShieldAlert className="h-3.5 w-3.5 text-danger" /> Impactando a saude do site</span>}
+              {viewMode === 'acknowledged' && <span className="inline-flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5 text-success" /> Desconto aplicado no calculo</span>}
+            </div>
           </div>
         </div>
 

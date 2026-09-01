@@ -4,6 +4,7 @@ import { DashboardLayout } from '../components/layout/DashboardLayout'
 import { AlarmsList } from '../components/alarms/AlarmsList'
 import { RecurringAlarms } from '../components/alarms/RecurringAlarms'
 import { AcknowledgmentHeaderCards } from '../components/alarms/AcknowledgeAlarmAction'
+import { BatchAcknowledgeButton } from '../components/alarms/BatchAcknowledgeButton'
 import { equipmentCatalog, findEquipmentCatalogItem } from '@/lib/equipmentCatalog'
 import { mockAlarms } from '../lib/mockData'
 import { sbaTorresBrasilSystems } from '@/lib/sbaTorresBrasilData'
@@ -177,14 +178,22 @@ export function Alarms() {
             <FilterChip value="acknowledged" label="Reconhecidos" count={scopedAlarms.filter((a) => isAcknowledged(a.id)).length} />
             <FilterChip value="all" label="Todos" count={scopedAlarms.length} />
           </div>
-          {selectedEquipmentId && (
-            <Link
-              to="/alarms"
-              className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Limpar filtro
-            </Link>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {ackFilter !== 'acknowledged' && (
+              <BatchAcknowledgeButton
+                alarms={ackFilter === 'active' ? filteredByAck : scopedAlarms.filter((a) => !isAcknowledged(a.id))}
+                scopeTitle={ackFilter === 'active' ? 'da visualizacao ATIVA' : 'ATIVOS do escopo'}
+              />
+            )}
+            {selectedEquipmentId && (
+              <Link
+                to="/alarms"
+                className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Limpar filtro
+              </Link>
+            )}
+          </div>
         </div>
 
         {selectedEquipmentId && (
