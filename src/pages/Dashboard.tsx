@@ -36,7 +36,7 @@ import {
   wellnesstecSiteMonthlySnapshots,
 } from '@/lib/wellnesstecOperationalData'
 import { WELLNESSTEC_SITE_ID } from '@/lib/wellnesstecData'
-import { TrendingUp, TrendingDown, Activity, AlertTriangle, Minus, Printer } from 'lucide-react'
+import { TrendingUp, TrendingDown, Activity, AlertTriangle, Minus, Printer, CalendarDays, ListFilter, CheckCircle2 } from 'lucide-react'
 
 type PdfColor = [number, number, number]
 
@@ -455,8 +455,9 @@ export function Dashboard() {
       .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
   }, [allEquipmentSnapshots, selectedClient, selectedSite])
   const availableMonths = allScopedSummaries
-  const [startMonth, setStartMonth] = useState(availableMonths[0]?.monthKey ?? '')
-  const [endMonth, setEndMonth] = useState(availableMonths[availableMonths.length - 1]?.monthKey ?? '')
+  const defaultLastMonth = availableMonths.length > 0 ? availableMonths[availableMonths.length - 1].monthKey : ''
+  const [startMonth, setStartMonth] = useState(defaultLastMonth)
+  const [endMonth, setEndMonth] = useState(defaultLastMonth)
   const [showMttrDetails, setShowMttrDetails] = useState(false)
   const kanbanStates = useMemo(() => loadKanbanStates(), [workflowVersion])
 
@@ -595,25 +596,78 @@ export function Dashboard() {
   }, [selectedSnapshots])
 
   const dashboardMetrics = useMemo(() => {
-    if (selectedSummaries.length === 0) {
+    const scopeAlarms = dashboardAlarmsScoped
+    const totalOccurrences = scopeAlarms.length
+    const ackedCount = scopeAlarms.filter((alarm) => !!ackStore[alarm.id]).length
+    const activeCount = totalOccurrences - ackedCount
+
+    if (selectedSummaries.length === 0 && scopeAlarms.length === 0) {
       return {
         averageHealth: 0,
+        averageHealthAdjusted: 0,
+        healthDelta: 0,
         averageAvailability: 0,
+        averageAvailabilityAdjusted: 0,
+        availabilityDelta: 0,
         mttr: 0,
         totalOccurrences: 0,
+        activeOccurrences: 0,
+        ackedOccurrences: 0,
         affectedEquipment: 0,
+        affectedEquipmentActive: 0,
       }
     }
 
-    const count = selectedSummaries.length
+    const count = Math.max(1, selectedSummaries.length)
+    const baseHealth = selectedSummaries.length > 0
+      ? Number((selectedSummaries.reduce((sum, item) => sum + item.health, 0) / count).toFixed(2))
+      : 76
+    const baseAvailability = selectedSummaries.length > 0
+      ? Number((selectedSummaries.reduce((sum, item) => sum + item.availability, 0) / count).toFixed(2))
+      : 94
+    const baseMttr = selectedSummaries.length > 0
+      ? Number((selectedSummaries.reduce((sum, item) => sum + item.mttr, 0) / count).toFixed(2))
+      : 4
+
+    const discount = applyAckDiscountToHealth(baseHealth, baseAvailability, scopeAlarms, ackStore, weightStore)
+
+    const equipmentWithActiveAlarm = new Set<string>()
+    const equipmentWithAnyAlarm = new Set<string>()
+    scopeAlarms.forEach((alarm) => {
+      equipmentWithAnyAlarm.add(alarm.equipmentId)
+      if (!ackStore[alarm.id]) equipmentWithActiveAlarm.add(alarm.equipmentId)
+    })
+    const affectedEquipment = Math.max(aggregatedEquipment.length, equipmentWithAnyAlarm.size)
+    const affectedEquipmentActive = Math.max(
+      aggregatedEquipment.filter((eq) => {
+        const hasActive = scopeAlarms.some((al) => al.equipmentId === eq.id && !ackStore[al.id])
+        return hasActive || (eq.totalOccurrences ?? 0) > 0
+      }).length,
+      equipmentWithActiveAlarm.size
+    )
+
     return {
-      averageHealth: Number((selectedSummaries.reduce((sum, item) => sum + item.health, 0) / count).toFixed(2)),
-      averageAvailability: Number((selectedSummaries.reduce((sum, item) => sum + item.availability, 0) / count).toFixed(2)),
-      mttr: Number((selectedSummaries.reduce((sum, item) => sum + item.mttr, 0) / count).toFixed(2)),
-      totalOccurrences: selectedSummaries.reduce((sum, item) => sum + item.totalOccurrences, 0),
-      affectedEquipment: aggregatedEquipment.length,
+      averageHealth: baseHealth,
+      averageHealthAdjusted: discount.health,
+      healthDelta: Number((discount.health - baseHealth).toFixed(2)),
+      averageAvailability: baseAvailability,
+      averageAvailabilityAdjusted: discount.availability,
+      availabilityDelta: Number((discount.availability - baseAvailability).toFixed(2)),
+      mttr: baseMttr,
+      totalOccurrences,
+      activeOccurrences: activeCount,
+      ackedOccurrences: ackedCount,
+      affectedEquipment,
+      affectedEquipmentActive,
     }
-  }, [selectedSummaries, aggregatedEquipment.length])
+  }, [
+    selectedSummaries,
+    aggregatedEquipment.length,
+    aggregatedEquipment,
+    dashboardAlarmsScoped,
+    ackStore,
+    weightStore,
+  ])
 
   const rankingData = useMemo<SystemRanking[]>(() => {
     return aggregatedEquipment.map((equipment, index) => ({
@@ -673,10 +727,12 @@ export function Dashboard() {
   const dashboardMetricsView = useMemo(
     () => ({
       ...dashboardMetrics,
-      totalOccurrences: dashboardAggregatedEquipment.reduce((sum, item) => sum + item.totalOccurrences, 0),
-      affectedEquipment: dashboardAggregatedEquipment.length,
+      totalOccurrences: dashboardMetrics.totalOccurrences,
+      activeOccurrences: dashboardMetrics.activeOccurrences,
+      ackedOccurrences: dashboardMetrics.ackedOccurrences,
+      affectedEquipment: dashboardMetrics.affectedEquipmentActive,
     }),
-    [dashboardAggregatedEquipment, dashboardMetrics]
+    [dashboardMetrics]
   )
 
   const filteredPredictiveTasks = useMemo(() => {
@@ -1163,9 +1219,40 @@ export function Dashboard() {
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+              {selectedSummaries.length > 0 && (
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                  selectedSummaries.length === 1
+                    ? 'border border-primary/20 bg-primary/10 text-primary'
+                    : 'border border-amber-400/40 bg-amber-50 text-amber-700'
+                }`}>
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  Período: {selectedSummaries.length === 1 ? selectedSummaries[0].month : `${selectedSummaries[0].month} → ${selectedSummaries[selectedSummaries.length - 1].month}`}
+                  <span className="rounded-full bg-white/60 px-1.5 py-0.5 text-[10px] font-bold">
+                    {selectedSummaries.length} mês{selectedSummaries.length === 1 ? '' : 'es'}
+                  </span>
+                </span>
+              )}
+            </div>
             <p className="text-gray-500">Visão consolidada dos sistemas e unidades com ocorrência no período</p>
+            <div className="flex flex-wrap items-center gap-3 text-[12px]">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-gray-700">
+                <ListFilter className="h-3.5 w-3.5 text-gray-500" />
+                <span>Alarmes considerados: <strong className="text-gray-900">{dashboardAlarmsScoped.length}</strong></span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-danger/20 bg-danger/5 px-2.5 py-1 text-danger">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Impactando saúde: <strong>{dashboardMetricsView.activeOccurrences}</strong>
+              </span>
+              {dashboardMetricsView.ackedOccurrences > 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-success/20 bg-success/5 px-2.5 py-1 text-success">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Reconhecidos: <strong>{dashboardMetricsView.ackedOccurrences}</strong> • +{dashboardMetricsView.healthDelta} pts saúde
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -1217,9 +1304,9 @@ export function Dashboard() {
         
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           <PerformanceGauge
-            value={dashboardMetricsView.averageHealth}
+            value={dashboardMetricsView.averageHealthAdjusted}
             title="Índice de Saúde dos Ativos"
-            subtitle="Equipamentos com ocorrências no período"
+            subtitle={`Base ${dashboardMetricsView.averageHealth}% • ${dashboardMetricsView.healthDelta > 0 ? `+${dashboardMetricsView.healthDelta} pts reconhec.` : `${dashboardMetricsView.healthDelta === 0 ? 'Ajuste aplicado' : `${dashboardMetricsView.healthDelta} pts`}`}`}
           />
           
           <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -1227,8 +1314,20 @@ export function Dashboard() {
               <h3 className="text-xl font-semibold text-gray-900">Disponibilidade Operacional</h3>
               {renderTrend(availabilityDelta)}
             </div>
-            <p className="mb-1 text-[2.2rem] font-bold leading-none text-primary">{dashboardMetricsView.averageAvailability}%</p>
-            <p className="text-sm leading-6 text-gray-500">Média dos equipamentos impactados</p>
+            <p className="mb-1 text-[2.2rem] font-bold leading-none text-primary">
+              {dashboardMetricsView.averageAvailabilityAdjusted}%
+            </p>
+            <p className="text-sm leading-6 text-gray-500">
+              Base {dashboardMetricsView.averageAvailability}% •{' '}
+              {dashboardMetricsView.availabilityDelta > 0 ? (
+                <span className="font-medium text-success">+{dashboardMetricsView.availabilityDelta} pts</span>
+              ) : dashboardMetricsView.availabilityDelta === 0 ? (
+                'Ajuste de reconhecimento aplicado'
+              ) : (
+                <span className="font-medium text-danger">{dashboardMetricsView.availabilityDelta} pts</span>
+              )}
+            </p>
+            <p className="mt-1 text-xs text-gray-400">Média dos equipamentos impactados</p>
           </div>
           
           <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -1268,7 +1367,15 @@ export function Dashboard() {
               </div>
             </div>
             <p className="mb-1 text-[2.2rem] font-bold leading-none text-gray-900">{dashboardMetricsView.totalOccurrences}</p>
-            <p className="text-sm leading-6 text-gray-500">{dashboardMetricsView.affectedEquipment} equipamentos impactados</p>
+            <p className="text-sm text-gray-600">
+              <span className="font-semibold text-danger">{dashboardMetricsView.activeOccurrences}</span>{' '}
+              <span className="text-gray-500">impactando</span> •{' '}
+              <span className="font-semibold text-success">{dashboardMetricsView.ackedOccurrences}</span>{' '}
+              <span className="text-gray-500">reconhecidos</span>
+            </p>
+            <p className="mt-1 text-xs text-gray-400">
+              {dashboardMetricsView.affectedEquipment} equipamentos impactados no período
+            </p>
           </div>
 
         </div>
