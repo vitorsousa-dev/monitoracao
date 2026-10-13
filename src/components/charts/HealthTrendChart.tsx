@@ -7,36 +7,37 @@ interface HealthTrendChartProps {
 
 export function HealthTrendChart({ data }: HealthTrendChartProps) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Tendência de Saúde do Sistema</h3>
+    <div className="rounded-xl border border-border bg-surface p-6 shadow-xs">
+      <h3 className="mb-4 text-base font-semibold text-foreground">Tendência de Saúde do Sistema</h3>
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-          <XAxis dataKey="month" stroke="#6C757D" />
-          <YAxis domain={[75, 100]} stroke="#6C757D" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#E6E9EF" />
+          <XAxis dataKey="month" stroke="#687080" />
+          <YAxis domain={[75, 100]} stroke="#687080" />
           <Tooltip
             contentStyle={{
               backgroundColor: '#FFFFFF',
-              border: '1px solid #E5E7EB',
+              border: '1px solid #E6E9EF',
               borderRadius: '8px',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+              boxShadow: '0 4px 6px -1px rgba(16, 24, 40, 0.06)',
+              fontSize: '12px',
             }}
           />
-          <Legend />
+          <Legend wrapperStyle={{ fontSize: '12px' }} />
           <Line
             type="monotone"
             dataKey="health"
             name="Saúde do Sistema"
-            stroke="#0F6CBD"
+            stroke="#4F46E5"
             strokeWidth={2}
-            dot={{ fill: '#0F6CBD', r: 4 }}
+            dot={{ fill: '#4F46E5', r: 4 }}
             activeDot={{ r: 6 }}
           />
           <Line
             type="monotone"
             dataKey="target"
             name="Meta"
-            stroke="#00B050"
+            stroke="#16A36A"
             strokeWidth={2}
             strokeDasharray="5 5"
             dot={false}

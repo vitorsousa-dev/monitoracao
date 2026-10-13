@@ -7,9 +7,9 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function getHealthStatusColor(health: number) {
-  if (health >= 90) return '#00B050'
-  if (health >= 80) return '#FFC000'
-  return '#E53935'
+  if (health >= 90) return '#16A36A'
+  if (health >= 80) return '#D97706'
+  return '#DC2626'
 }
 
 export function getHealthStatusText(health: number) {

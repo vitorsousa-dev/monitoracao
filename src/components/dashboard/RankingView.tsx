@@ -15,19 +15,19 @@ export function RankingView({ rankings }: RankingViewProps) {
   )
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">Ranking de Equipamentos com Mais Alarmes</h3>
-        <div className="text-xs text-gray-500">
-          Contagem de alarmes <strong className="text-gray-800">ativos</strong> (reconhecidos nao contam para o ranking)
+    <div className="rounded-xl border border-border bg-surface p-6 shadow-xs">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-base font-semibold text-foreground">Ranking de Equipamentos com Mais Alarmes</h3>
+        <div className="text-xs text-muted">
+          Contagem de alarmes <strong className="text-foreground">ativos</strong> (reconhecidos não contam)
         </div>
       </div>
       <div className="space-y-3">
         {visibleRankings.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-success/40 bg-success/5 p-6 text-center">
+          <div className="rounded-lg border border-dashed border-success/40 bg-success-soft p-6 text-center">
             <CheckCircle2 className="mx-auto h-8 w-8 text-success" />
             <p className="mt-2 text-sm font-semibold text-success">Nenhum alarme ativo no período</p>
-            <p className="mt-1 text-xs text-gray-500">Todos os alarmes foram reconhecidos. O ranking ficou zerado.</p>
+            <p className="mt-1 text-xs text-muted">Todos os alarmes foram reconhecidos. O ranking ficou zerado.</p>
           </div>
         ) : (
           visibleRankings.map((system) => {
@@ -42,8 +42,8 @@ export function RankingView({ rankings }: RankingViewProps) {
                 trendColor = 'text-danger'
                 break
               default:
-                trendIcon = <Minus className="h-4 w-4 text-gray-500" />
-                trendColor = 'text-gray-500'
+                trendIcon = <Minus className="h-4 w-4 text-muted" />
+                trendColor = 'text-muted'
             }
 
             const healthColor = system.healthScore >= 90 ? 'text-success' : system.healthScore >= 80 ? 'text-warning' : 'text-danger'
@@ -56,42 +56,42 @@ export function RankingView({ rankings }: RankingViewProps) {
               <Link
                 key={system.id}
                 to={targetUrl}
-                className="flex items-center justify-between p-4 border border-gray-100 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex items-center justify-between gap-3 rounded-lg border border-border p-4 transition-colors hover:bg-surface-muted"
               >
-                <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${system.rank === 1 ? 'bg-danger' : system.rank === 2 ? 'bg-warning' : 'bg-neutral'}`}>
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${system.rank === 1 ? 'bg-danger' : system.rank === 2 ? 'bg-warning' : 'bg-neutral'}`}>
                     {system.rank}
                   </div>
-                  <div>
-                    <p className="font-medium text-gray-900">{system.clientName}</p>
-                    <p className="text-sm text-gray-500">{system.systemName}</p>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-foreground">{system.clientName}</p>
+                    <p className="truncate text-sm text-muted">{system.systemName}</p>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-6">
+                <div className="flex flex-wrap items-center gap-5">
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-danger">{system.criticalAlarms}</p>
-                    <p className="text-xs text-gray-500">Criticas</p>
+                    <p className="text-xl font-bold tabular-nums text-danger">{system.criticalAlarms}</p>
+                    <p className="text-xs text-muted">Críticas</p>
                   </div>
                   <div className="text-center">
                     <div className="flex items-center justify-center gap-2">
-                      <p className="text-2xl font-bold text-gray-900">{system.totalAlarms}</p>
+                      <p className="text-xl font-bold tabular-nums text-foreground">{system.totalAlarms}</p>
                       {acked > 0 && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-success/10 border border-success/20 px-2 py-0.5 text-[10px] font-semibold text-success">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-success/20 bg-success-soft px-2 py-0.5 text-[10px] font-semibold text-success">
                           <CheckCircle2 className="h-3 w-3" />
                           +{acked}
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-500">{acked > 0 ? 'Ativos' : 'Total'}</p>
+                    <p className="text-xs text-muted">{acked > 0 ? 'Ativos' : 'Total'}</p>
                   </div>
                   <div className="text-center">
-                    <p className={`text-2xl font-bold ${healthColor}`}>{system.healthScore}%</p>
-                    <p className="text-xs text-gray-500">Saude</p>
+                    <p className={`text-xl font-bold tabular-nums ${healthColor}`}>{system.healthScore}%</p>
+                    <p className="text-xs text-muted">Saúde</p>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="hidden items-center gap-1 sm:flex">
                     {trendIcon}
-                    <span className={trendColor}>{system.trend === 'up' ? 'Melhorando' : system.trend === 'down' ? 'Piorando' : 'Estavel'}</span>
+                    <span className={`text-sm ${trendColor}`}>{system.trend === 'up' ? 'Melhorando' : system.trend === 'down' ? 'Piorando' : 'Estável'}</span>
                   </div>
                 </div>
               </Link>
@@ -104,7 +104,7 @@ export function RankingView({ rankings }: RankingViewProps) {
           <button
             type="button"
             onClick={() => setShowAll((current) => !current)}
-            className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            className="inline-flex items-center rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface-muted"
           >
             {showAll ? 'Ver menos' : `Ver mais ${rankings.length - 5} itens`}
           </button>

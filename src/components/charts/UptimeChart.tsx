@@ -7,32 +7,33 @@ interface UptimeChartProps {
 
 export function UptimeChart({ data }: UptimeChartProps) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Disponibilidade Operacional</h3>
+    <div className="rounded-xl border border-border bg-surface p-6 shadow-xs">
+      <h3 className="mb-4 text-base font-semibold text-foreground">Disponibilidade Operacional</h3>
       <ResponsiveContainer width="100%" height={300}>
         <AreaChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
           <defs>
             <linearGradient id="colorAvailability" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#0F6CBD" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#0F6CBD" stopOpacity={0} />
+              <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.25} />
+              <stop offset="95%" stopColor="#4F46E5" stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-          <XAxis dataKey="month" stroke="#6C757D" />
-          <YAxis domain={[85, 100]} stroke="#6C757D" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#E6E9EF" />
+          <XAxis dataKey="month" stroke="#687080" />
+          <YAxis domain={[85, 100]} stroke="#687080" />
           <Tooltip
             contentStyle={{
               backgroundColor: '#FFFFFF',
-              border: '1px solid #E5E7EB',
+              border: '1px solid #E6E9EF',
               borderRadius: '8px',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+              boxShadow: '0 4px 6px -1px rgba(16, 24, 40, 0.06)',
+              fontSize: '12px',
             }}
           />
           <Area
             type="monotone"
             dataKey="availability"
             name="Disponibilidade Operacional"
-            stroke="#0F6CBD"
+            stroke="#4F46E5"
             strokeWidth={2}
             fillOpacity={1}
             fill="url(#colorAvailability)"
