@@ -9,6 +9,7 @@ import { Settings } from './pages/Settings'
 import { Alarms } from './pages/Alarms'
 import { AlertManagement } from './pages/AlertManagement'
 import { Notifications } from './pages/Notifications'
+import { CoolAutomationDiagnostic } from './pages/CoolAutomationDiagnostic'
 import { AssetManagement } from './pages/AssetManagement'
 import { FinancialManagement } from './pages/FinancialManagement'
 import { PredictiveMaintenance } from './pages/PredictiveMaintenance'
@@ -47,6 +48,14 @@ function App() {
       <Route path="/alarms" element={<Alarms />} />
       <Route path="/alert-management" element={<AlertManagement />} />
       <Route path="/notifications" element={<Notifications />} />
+      <Route
+        path="/coolautomation"
+        element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <CoolAutomationDiagnostic />
+          </ProtectedRoute>
+        }
+      />
       <Route path="/assets" element={<AssetManagement />} />
       <Route path="/financial" element={<FinancialManagement />} />
       <Route path="/predictive" element={<PredictiveMaintenance />} />

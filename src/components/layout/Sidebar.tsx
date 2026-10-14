@@ -15,6 +15,7 @@ import {
   ChevronRight,
   X,
   Bell,
+  Server,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useScope } from '@/hooks/useScope'
@@ -26,6 +27,7 @@ interface NavItem {
   label: string
   icon: React.ComponentType<{ className?: string }>
   badge?: string
+  roles?: Array<'admin' | 'manager' | 'viewer'>
 }
 
 interface NavGroup {
@@ -60,7 +62,8 @@ const navGroups: NavGroup[] = [
   {
     label: 'Administração',
     items: [
-      { path: '/users', label: 'Usuários', icon: Users },
+      { path: '/users', label: 'Usuários', icon: Users, roles: ['admin'] },
+      { path: '/coolautomation', label: 'CoolAutomation', icon: Server, roles: ['admin'] },
       { path: '/settings', label: 'Configurações', icon: Settings },
     ],
   },
@@ -131,15 +134,20 @@ export function Sidebar() {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin">
-          {navGroups.map((group) => (
-            <div key={group.label} className="mb-5">
-              {!isCollapsed && (
-                <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
-                  {group.label}
-                </p>
-              )}
-              <ul className="space-y-1">
-                {group.items.map((item) => {
+          {navGroups.map((group) => {
+            const visibleItems = group.items.filter(
+              (item) => !item.roles || (user && item.roles.includes(user.role))
+            )
+            if (visibleItems.length === 0) return null
+            return (
+              <div key={group.label} className="mb-5">
+                {!isCollapsed && (
+                  <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                    {group.label}
+                  </p>
+                )}
+                <ul className="space-y-1">
+                  {visibleItems.map((item) => {
                   const active = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
                   return (
                     <li key={item.path}>
@@ -166,7 +174,8 @@ export function Sidebar() {
                 })}
               </ul>
             </div>
-          ))}
+            )
+          })}
         </nav>
 
         {/* User + collapse */}
