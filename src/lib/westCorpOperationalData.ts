@@ -1,4 +1,4 @@
-﻿import { Alarm, EquipmentMonthlySnapshot, MonthlySummary, SiteMonthlySnapshot } from '@/types'
+import { Alarm, EquipmentMonthlySnapshot, MonthlySummary, SiteMonthlySnapshot } from '@/types'
 import { WEST_CORP_CLIENT, WEST_CORP_SITE_ID, WEST_CORP_SITE_NAME, westCorpSite, westCorpSystems } from './westCorpData'
 import { getHealthStatusText } from './utils'
 
@@ -921,7 +921,7 @@ const westCorpUnitHealthRollups: WestCorpUnitHealthRollup[] = Array.from(unitRol
 type ChSeverity = 'Critical' | 'High' | 'Medium' | 'Low'
 type ChCategory = 'Critical Outdoor' | 'Outdoor' | 'Indoor' | 'Sensor' | 'Communication Error'
 
-interface ChMeta {
+export interface ChMeta {
   severity: ChSeverity
   category: ChCategory
   shortTitle: string
@@ -1516,5 +1516,6 @@ export {
   __mergedWestCorpMonthlySummaries as westCorpMonthlySummaries,
   __mergedWestCorpSiteMonthlySnapshots as westCorpSiteMonthlySnapshots,
   __mergedWestCorpUnitHealthRollups as westCorpUnitHealthRollups,
+  CH_METADATA as westCorpChMetadata,
 }
 

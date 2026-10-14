@@ -8,6 +8,7 @@ import { EquipmentDetail } from './pages/EquipmentDetail'
 import { Settings } from './pages/Settings'
 import { Alarms } from './pages/Alarms'
 import { AlertManagement } from './pages/AlertManagement'
+import { Notifications } from './pages/Notifications'
 import { AssetManagement } from './pages/AssetManagement'
 import { FinancialManagement } from './pages/FinancialManagement'
 import { PredictiveMaintenance } from './pages/PredictiveMaintenance'
@@ -45,6 +46,7 @@ function App() {
       <Route path="/equipment/:id" element={<EquipmentDetail />} />
       <Route path="/alarms" element={<Alarms />} />
       <Route path="/alert-management" element={<AlertManagement />} />
+      <Route path="/notifications" element={<Notifications />} />
       <Route path="/assets" element={<AssetManagement />} />
       <Route path="/financial" element={<FinancialManagement />} />
       <Route path="/predictive" element={<PredictiveMaintenance />} />

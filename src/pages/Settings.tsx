@@ -4,7 +4,8 @@ import { UserManagement } from '@/components/users/UserManagement'
 import { UserForm } from '@/components/users/UserForm'
 import { useAuth } from '@/hooks/useAuth'
 import { User } from '@/types'
-import { User as UserIcon, Bell, Shield, Database, AlertTriangle, CheckCircle2, ShieldAlert, Users as UsersIcon } from 'lucide-react'
+import { User as UserIcon, Bell, Shield, Database, AlertTriangle, CheckCircle2, ShieldAlert, Users as UsersIcon, Save, Mail, MessageSquare } from 'lucide-react'
+import { useNotificationConfig, parseRecipients } from '@/lib/notificationStorage'
 
 function getRoleLabel(role: 'admin' | 'manager' | 'viewer') {
   if (role === 'admin') return 'Administrador'
@@ -25,9 +26,28 @@ type FeedbackBanner = {
 export function Settings() {
   const { user, users, canEditPlatform, createUser, deleteUser } = useAuth()
   const [feedback, setFeedback] = useState<FeedbackBanner>(null)
+  const { config, updateConfig } = useNotificationConfig()
+  const [apiEndpoint, setApiEndpoint] = useState(config.endpoint)
+  const [apiKey, setApiKey] = useState(config.apiKey)
+  const [senderName, setSenderName] = useState(config.senderName)
+  const [defaultEmails, setDefaultEmails] = useState(config.defaultEmails.join(', '))
+  const [defaultPhones, setDefaultPhones] = useState(config.defaultPhones.join(', '))
+  const [savedMsg, setSavedMsg] = useState(false)
 
   if (!user) {
     return null
+  }
+
+  const handleSaveNotificationConfig = () => {
+    updateConfig({
+      endpoint: apiEndpoint.trim(),
+      apiKey: apiKey.trim(),
+      senderName: senderName.trim() || 'MeuDashboard',
+      defaultEmails: parseRecipients(defaultEmails),
+      defaultPhones: parseRecipients(defaultPhones),
+    })
+    setSavedMsg(true)
+    window.setTimeout(() => setSavedMsg(false), 3000)
   }
 
   const handleAddUser = (userData: Omit<User, 'id' | 'createdAt'>) => {
@@ -215,6 +235,102 @@ export function Settings() {
             </div>
           )}
         </div>
+
+        {(user.role === 'admin' || user.role === 'manager') && (
+          <div className="rounded-xl border border-border bg-surface p-6 shadow-xs">
+            <div className="mb-6 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                <Bell className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Integração de Notificações (SMS/Email)</h3>
+                <p className="text-sm text-muted">
+                  Configure a API que receberá os alertas filtrados para encaminhamento ao cliente.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="mb-1.5 block text-xs font-medium text-muted">Endpoint da API (POST)</label>
+                <input
+                  type="url"
+                  value={apiEndpoint}
+                  onChange={(e) => setApiEndpoint(e.target.value)}
+                  placeholder="https://api.sua-plataforma.com/notifications"
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-muted">Chave de API (Bearer)</label>
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="sk_..."
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-muted">Nome do remetente</label>
+                <input
+                  type="text"
+                  value={senderName}
+                  onChange={(e) => setSenderName(e.target.value)}
+                  placeholder="MeuDashboard"
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted">
+                  <Mail className="h-3.5 w-3.5" /> Emails padrão (separados por vírgula)
+                </label>
+                <input
+                  type="text"
+                  value={defaultEmails}
+                  onChange={(e) => setDefaultEmails(e.target.value)}
+                  placeholder="cliente@empresa.com"
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted">
+                  <MessageSquare className="h-3.5 w-3.5" /> Telefones padrão (separados por vírgula)
+                </label>
+                <input
+                  type="text"
+                  value={defaultPhones}
+                  onChange={(e) => setDefaultPhones(e.target.value)}
+                  placeholder="+5511999999999"
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 flex items-center justify-between">
+              <p className="text-xs text-muted">
+                Formato do payload enviado: JSON com <code className="rounded bg-surface-muted px-1">channel</code>,{' '}
+                <code className="rounded bg-surface-muted px-1">to</code>,{' '}
+                <code className="rounded bg-surface-muted px-1">subject</code>,{' '}
+                <code className="rounded bg-surface-muted px-1">message</code> e{' '}
+                <code className="rounded bg-surface-muted px-1">alarmIds</code>.
+              </p>
+              <button
+                type="button"
+                onClick={handleSaveNotificationConfig}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+              >
+                <Save className="h-4 w-4" />
+                Salvar configuração
+              </button>
+            </div>
+            {savedMsg && (
+              <div className="mt-3 flex items-center gap-2 text-sm text-success">
+                <CheckCircle2 className="h-4 w-4" /> Configuração salva com sucesso.
+              </div>
+            )}
+          </div>
+        )}
 
         {user.role === 'admin' && (
           <div className="space-y-6 border-t border-gray-200 pt-6">

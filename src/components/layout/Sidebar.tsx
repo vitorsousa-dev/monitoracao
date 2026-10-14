@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Bell,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useScope } from '@/hooks/useScope'
@@ -43,6 +44,7 @@ const navGroups: NavGroup[] = [
       { path: '/equipment', label: 'Saúde dos Equipamentos', icon: Thermometer },
       { path: '/alarms', label: 'Alarmes', icon: AlertTriangle },
       { path: '/alert-management', label: 'Gestão de Alertas', icon: KanbanSquare },
+      { path: '/notifications', label: 'Notificações', icon: Bell },
     ],
   },
   {
