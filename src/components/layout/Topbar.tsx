@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useScope } from '@/hooks/useScope'
 import { useLayout } from '@/contexts/LayoutContext'
 import { cn } from '@/lib/utils'
+import { getLiveSnapshot } from '@/lib/liveData'
 
 const pageTitles: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -70,6 +71,12 @@ export function Topbar() {
             <span className="text-border">/</span>
             <span className="truncate font-medium text-foreground">{currentTitle}</span>
           </nav>
+          {getLiveSnapshot().updatedAt && (
+            <span className="mt-0.5 inline-flex items-center gap-1.5 text-xs text-muted" title="Dados enviados automaticamente pelo monitoramento CoolAutomation">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              Ao vivo · atualizado às {new Date(getLiveSnapshot().updatedAt as string).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
         </div>
 
         {/* Scope selects */}

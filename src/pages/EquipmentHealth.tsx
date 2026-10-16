@@ -18,6 +18,7 @@ import {
   sbaTorresBrasilUnitHealthRollups,
 } from '@/lib/sbaTorresBrasilOperationalData'
 import { buildEquipmentJustification } from '@/lib/utils'
+import { getLiveSiteConfigs } from '@/lib/liveData'
 import {
   WELLNESSTEC_CLIENT,
   WELLNESSTEC_SITE_ID,
@@ -113,7 +114,8 @@ export function EquipmentHealth() {
 
   const activeStructuredSite = useMemo(
     () =>
-      structuredSiteConfigs.find(
+      // clientes com dados ao vivo (Diagnóstico Plus) que ainda não têm tela estruturada própria entram aqui
+      ([...structuredSiteConfigs, ...getLiveSiteConfigs(structuredSiteConfigs.map((c) => c.siteId))] as StructuredSiteConfig[]).find(
         (siteConfig) =>
           selectedSite === siteConfig.siteId ||
           (selectedSite === 'all-sites' && selectedClient === siteConfig.client)
